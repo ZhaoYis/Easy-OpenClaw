@@ -8,12 +8,12 @@ namespace OpenClaw.Core.Client;
 /// Tracks in-flight requests and correlates them with responses by id.
 /// Singleton 生命周期：持有所有进行中请求的状态，贯穿整个应用生命周期。
 /// </summary>
-public sealed class RequestManager
+public sealed class GatewayRequestManager
 {
     private readonly ConcurrentDictionary<string, TaskCompletionSource<GatewayResponse>> _pending = new();
     private readonly TimeSpan _defaultTimeout;
 
-    public RequestManager(IOptions<GatewayOptions> options)
+    public GatewayRequestManager(IOptions<GatewayOptions> options)
     {
         _defaultTimeout = options.Value.RequestTimeout;
     }
@@ -43,6 +43,7 @@ public sealed class RequestManager
             tcs.TrySetResult(response);
             return true;
         }
+
         return false;
     }
 

@@ -16,7 +16,7 @@ namespace OpenClaw.Core.Client;
 public sealed partial class GatewayClient : IAsyncDisposable
 {
     private readonly GatewayOptions _options;
-    private readonly RequestManager _requests;
+    private readonly GatewayRequestManager _gatewayRequests;
     private readonly EventRouter _events;
     private readonly DeviceIdentity _device;
     private WebSocketClient? _ws;
@@ -49,12 +49,12 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     public GatewayClient(
         IOptions<GatewayOptions> options,
-        RequestManager requests,
+        GatewayRequestManager gatewayRequests,
         EventRouter events,
         DeviceIdentity device)
     {
         _options = options.Value;
-        _requests = requests;
+        _gatewayRequests = gatewayRequests;
         _events = events;
         _device = device;
 
@@ -171,7 +171,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     public async Task<GatewayResponse> SendRequestAsync<T>(string method, T parameters, CancellationToken ct = default)
     {
-        var (id, task) = _requests.Register(_options.RequestTimeout);
+        var (id, task) = _gatewayRequests.Register(_options.RequestTimeout);
         var paramsJson = JsonSerializer.SerializeToElement(parameters, JsonDefaults.SerializerOptions);
 
         var req = new GatewayRequest
@@ -195,7 +195,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     internal async Task<GatewayResponse> SendRequestRawAsync(string method, JsonElement parameters, CancellationToken ct)
     {
-        var (id, task) = _requests.Register(_options.RequestTimeout);
+        var (id, task) = _gatewayRequests.Register(_options.RequestTimeout);
 
         var req = new GatewayRequest
         {
@@ -407,7 +407,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
         };
         Log.Debug($"← res id={resp.Id[..Math.Min(resp.Id.Length, 8)]}... ok={resp.Ok}");
 
-        if (!_requests.TryComplete(resp.Id, resp))
+        if (!_gatewayRequests.TryComplete(resp.Id, resp))
         {
             Log.Warn($"收到未匹配的响应 id={resp.Id}");
         }
@@ -543,7 +543,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
         _disposed = true;
 
         _device.Dispose();
-        _requests.CancelAll();
+        _gatewayRequests.CancelAll();
         if (_lifetimeCts is not null)
             await _lifetimeCts.CancelAsync();
         _lifetimeCts?.Dispose();
