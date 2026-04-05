@@ -34,28 +34,16 @@ public sealed class AutoApproveService : BackgroundService
     /// <summary>
     /// 后台服务主执行入口，由 <see cref="BackgroundService"/> 框架调用。
     /// 执行流程：
-    /// 1. 建立到网关的 WebSocket 连接（若自身设备未配对则退出）
+    /// 1. 建立到网关的 WebSocket 连接，若设备未配对则自动等待人工审批完成后重连
     /// 2. 进入无限轮询循环，每隔 <see cref="_pollInterval"/> 调用一次 <see cref="PollPendingAsync"/>
-    /// 3. 轮询中遇到的异常按类型处理：取消则退出、超时则跳过、NOT_PAIRED 则终止、其他异常记录后继续
+    /// 3. 轮询中遇到的异常按类型处理：取消则退出、超时则跳过、NOT_PAIRED 则重连等待审批、其他异常记录后继续
     /// 4. 收到停止信号（<paramref name="stoppingToken"/> 取消）时优雅退出
     /// </summary>
     /// <param name="stoppingToken">Host 停止时触发的取消令牌</param>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try
-        {
-            await _client.ConnectAsync(stoppingToken);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains(GatewayConstants.ErrorCodes.NotPaired, StringComparison.OrdinalIgnoreCase))
-        {
-            Log.Error("当前设备未被批准，请先在 Gateway 控制面板中手动批准此设备");
+        if (!await TryConnectAsync(stoppingToken))
             return;
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"连接失败: {ex.Message}");
-            return;
-        }
 
         Log.Success("Connected!");
         Log.Info($"自动审批服务已启动，轮询间隔: {_pollInterval.TotalSeconds}s");
@@ -76,8 +64,10 @@ public sealed class AutoApproveService : BackgroundService
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains(GatewayConstants.ErrorCodes.NotPaired))
             {
-                Log.Error("请先在 Gateway 控制面板中手动批准此服务自身，然后重新启动");
-                return;
+                Log.Warn("服务自身配对已失效，尝试重新连接并等待审批...");
+                if (!await TryConnectAsync(stoppingToken))
+                    return;
+                Log.Success("重新连接成功，继续轮询");
             }
             catch (Exception ex)
             {
@@ -95,6 +85,36 @@ public sealed class AutoApproveService : BackgroundService
         }
 
         Log.Info("自动审批服务已停止");
+    }
+
+    /// <summary>
+    /// 尝试连接到网关，支持 NOT_PAIRED 场景下的自动等待。
+    /// 使用 <see cref="GatewayClient.ConnectWithRetryAsync"/> 在设备未配对时按指数退避轮询重连，
+    /// 直到人工在 Gateway 控制面板中完成审批后自动建立连接。
+    /// </summary>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>连接成功返回 true；不可恢复的异常返回 false</returns>
+    private async Task<bool> TryConnectAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _client.ConnectWithRetryAsync(ct);
+            return true;
+        }
+        catch (NotPairedException)
+        {
+            Log.Error("已达到最大配对等待次数，请在 Gateway 控制面板中手动批准此设备后重新启动服务");
+            return false;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"连接失败: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>
