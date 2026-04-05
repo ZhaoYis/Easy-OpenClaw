@@ -178,6 +178,19 @@ public static class GatewayConstants
         /// <summary>登出指定渠道</summary>
         public const string ChannelsLogout = "channels.logout";
 
+        // ── Web 登录 ──────────────────────────────────────────
+
+        /// <summary>启动 QR/Web 登录流程，用于支持二维码扫码登录的 Web 渠道</summary>
+        public const string WebLoginStart = "web.login.start";
+
+        /// <summary>等待 QR/Web 登录流程完成，成功后自动启动对应渠道</summary>
+        public const string WebLoginWait = "web.login.wait";
+
+        // ── 推送通知 ──────────────────────────────────────────
+
+        /// <summary>向已注册的 iOS 节点发送测试 APNs 推送</summary>
+        public const string PushTest = "push.test";
+
         /// <summary>综合运行状态</summary>
         public const string Status = "status";
 
@@ -250,6 +263,17 @@ public static class GatewayConstants
         /// <summary>解决执行审批请求（批准/拒绝）</summary>
         public const string ExecApprovalResolve = "exec.approval.resolve";
 
+        // ── 插件审批 ──────────────────────────────────────
+
+        /// <summary>发起插件自定义审批请求，由插件在需要用户确认时调用</summary>
+        public const string PluginApprovalRequest = "plugin.approval.request";
+
+        /// <summary>等待插件审批决定，挂起直到审批被批准/拒绝或超时返回 null</summary>
+        public const string PluginApprovalWaitDecision = "plugin.approval.waitDecision";
+
+        /// <summary>解决插件审批请求（批准/拒绝），由审批者（operator）调用</summary>
+        public const string PluginApprovalResolve = "plugin.approval.resolve";
+
         // ── 向导 ────────────────────────────────────────────
 
         /// <summary>启动向导流程</summary>
@@ -266,19 +290,25 @@ public static class GatewayConstants
 
         // ── 语音对话 ────────────────────────────────────────
 
-        /// <summary>获取语音对话配置</summary>
+        /// <summary>获取语音对话配置，支持 includeSecrets 参数（需要 operator.talk.secrets 或 operator.admin 权限）</summary>
         public const string TalkConfig = "talk.config";
 
-        /// <summary>获取/设置语音对话模式</summary>
+        /// <summary>获取/设置语音对话模式，变更会广播给所有 WebChat/Control UI 客户端</summary>
         public const string TalkMode = "talk.mode";
+
+        /// <summary>通过当前活跃的 Talk 语音提供商合成语音</summary>
+        public const string TalkSpeak = "talk.speak";
 
         // ── 模型与工具 ──────────────────────────────────────
 
         /// <summary>列出可用的 LLM 模型</summary>
         public const string ModelsList = "models.list";
 
-        /// <summary>获取工具目录</summary>
+        /// <summary>获取工具目录（按 Agent 分组，含 provenance 元数据）</summary>
         public const string ToolsCatalog = "tools.catalog";
+
+        /// <summary>获取某会话当前运行时生效的工具清单（session 作用域，需 operator.read）</summary>
+        public const string ToolsEffective = "tools.effective";
 
         // ── Agent 管理 ──────────────────────────────────────
 
@@ -317,6 +347,12 @@ public static class GatewayConstants
         /// <summary>更新技能</summary>
         public const string SkillsUpdate = "skills.update";
 
+        /// <summary>在 ClawHub 中按关键词搜索技能元数据（operator.read）</summary>
+        public const string SkillsSearch = "skills.search";
+
+        /// <summary>获取 ClawHub 上指定 slug 的技能详情（operator.read）</summary>
+        public const string SkillsDetail = "skills.detail";
+
         // ── 系统更新 ────────────────────────────────────────
 
         /// <summary>执行系统更新</summary>
@@ -340,13 +376,60 @@ public static class GatewayConstants
 
         // ── 会话管理 ────────────────────────────────────────
 
-        /// <summary>列出所有会话</summary>
+        /// <summary>列出所有会话，返回当前会话索引</summary>
         public const string SessionsList = "sessions.list";
 
-        /// <summary>预览会话内容</summary>
+        /// <summary>
+        /// 为当前 WebSocket 连接打开「会话索引/元数据变更」推送。
+        /// 官方说明：toggle session change event subscriptions for the current WS client。
+        /// </summary>
+        /// <remarks>
+        /// 这是 <c>type:&quot;req&quot;</c> 帧上的 <c>method</c> 名称（请求/响应式 RPC），
+        /// 不是 <c>type:&quot;event&quot;</c> 的事件名；开启后网关会向本连接推送 <see cref="Events.SessionsChanged"/>（<c>sessions.changed</c>）。
+        /// </remarks>
+        public const string SessionsSubscribe = "sessions.subscribe";
+
+        /// <summary>
+        /// 为当前 WebSocket 连接关闭「会话索引/元数据变更」推送（与 <see cref="SessionsSubscribe"/> 配对）。
+        /// </summary>
+        /// <remarks>同为 <c>req.method</c>，用于停止接收 <see cref="Events.SessionsChanged"/>。</remarks>
+        public const string SessionsUnsubscribe = "sessions.unsubscribe";
+
+        /// <summary>
+        /// 为当前连接打开某一指定会话的 transcript/message 推送开关。
+        /// 官方说明：toggle transcript/message event subscriptions for one session。
+        /// </summary>
+        /// <remarks>
+        /// 仍为 <c>type:&quot;req&quot;</c> 的 <c>method</c>；成功后可在本连接收到 <see cref="Events.SessionMessage"/> / <see cref="Events.SessionTool"/>。
+        /// 请求参数见 <see cref="SessionsMessagesKeyParams"/>（JSON 字段 <c>key</c>）。
+        /// </remarks>
+        public const string SessionsMessagesSubscribe = "sessions.messages.subscribe";
+
+        /// <summary>
+        /// 关闭某一指定会话的 transcript/message 推送（与 <see cref="SessionsMessagesSubscribe"/> 配对）。
+        /// </summary>
+        /// <remarks>参数同为会话 <c>key</c>，见 <see cref="SessionsMessagesKeyParams"/>。</remarks>
+        public const string SessionsMessagesUnsubscribe = "sessions.messages.unsubscribe";
+
+        /// <summary>预览会话内容（有界 transcript 预览）</summary>
         public const string SessionsPreview = "sessions.preview";
 
-        /// <summary>补丁修改会话属性</summary>
+        /// <summary>解析/规范化会话目标标识</summary>
+        public const string SessionsResolve = "sessions.resolve";
+
+        /// <summary>创建新的会话条目</summary>
+        public const string SessionsCreate = "sessions.create";
+
+        /// <summary>向已有会话发送消息</summary>
+        public const string SessionsSend = "sessions.send";
+
+        /// <summary>中断并转向活跃会话（interrupt-and-steer 变体）</summary>
+        public const string SessionsSteer = "sessions.steer";
+
+        /// <summary>中止会话当前正在进行的工作</summary>
+        public const string SessionsAbort = "sessions.abort";
+
+        /// <summary>补丁修改会话属性/覆盖配置</summary>
         public const string SessionsPatch = "sessions.patch";
 
         /// <summary>重置会话（清空上下文）</summary>
@@ -357,6 +440,18 @@ public static class GatewayConstants
 
         /// <summary>压缩会话（合并旧消息）</summary>
         public const string SessionsCompact = "sessions.compact";
+
+        /// <summary>获取指定会话的完整存储行数据</summary>
+        public const string SessionsGet = "sessions.get";
+
+        /// <summary>查询指定会话的使用量摘要（Token 数、请求次数、费用等）</summary>
+        public const string SessionsUsage = "sessions.usage";
+
+        /// <summary>查询指定会话的使用量时序数据（按时间区间聚合的 Token/请求/费用曲线）</summary>
+        public const string SessionsUsageTimeseries = "sessions.usage.timeseries";
+
+        /// <summary>查询指定会话的使用量日志条目（逐条 LLM 调用记录）</summary>
+        public const string SessionsUsageLogs = "sessions.usage.logs";
 
         // ── 心跳 ────────────────────────────────────────────
 
@@ -504,7 +599,7 @@ public static class GatewayConstants
 
         // ── 聊天 ────────────────────────────────────────────
 
-        /// <summary>获取聊天历史记录</summary>
+        /// <summary>获取聊天历史记录（UI 展示归一化：剥离指令标签、工具调用 XML、控制 token、静默行等）</summary>
         public const string ChatHistory = "chat.history";
 
         /// <summary>中止当前聊天回合</summary>
@@ -512,6 +607,9 @@ public static class GatewayConstants
 
         /// <summary>发送聊天消息</summary>
         public const string ChatSend = "chat.send";
+
+        /// <summary>向聊天会话注入一条消息（不触发 Agent 生成，直接插入历史记录）</summary>
+        public const string ChatInject = "chat.inject";
     }
 
     /// <summary>
@@ -528,6 +626,12 @@ public static class GatewayConstants
 
         /// <summary>聊天状态变更事件（pending → streaming → final）</summary>
         public const string Chat = "chat";
+
+        /// <summary>
+        /// 聊天 UI 的 transcript 类更新事件（例如消息注入），与 <see cref="Chat"/> 同属 chat 事件族。
+        /// 网关可能单独推送此事件名，也可能在 <see cref="Chat"/> 的 payload 中用 kind/type 区分。
+        /// </summary>
+        public const string ChatInject = "chat.inject";
 
         /// <summary>在线状态变更事件（设备上下线）</summary>
         public const string Presence = "presence";
@@ -574,8 +678,33 @@ public static class GatewayConstants
         /// <summary>执行审批结果事件（审批决定已做出）</summary>
         public const string ExecApprovalResolved = "exec.approval.resolved";
 
+        /// <summary>插件审批请求事件（插件发起了新的审批请求，需要用户确认）</summary>
+        public const string PluginApprovalRequested = "plugin.approval.requested";
+
+        /// <summary>插件审批结果事件（插件审批请求被批准或拒绝）</summary>
+        public const string PluginApprovalResolved = "plugin.approval.resolved";
+
         /// <summary>系统更新可用事件</summary>
         public const string UpdateAvailable = "update.available";
+
+        /// <summary>
+        /// 已订阅会话的 transcript 消息更新，需先通过 <see cref="Methods.SessionsMessagesSubscribe"/> 订阅对应会话。
+        /// </summary>
+        public const string SessionMessage = "session.message";
+
+        /// <summary>
+        /// 已订阅会话的工具调用 / 工具流式事件更新，需先通过 <see cref="Methods.SessionsMessagesSubscribe"/> 订阅对应会话。
+        /// </summary>
+        public const string SessionTool = "session.tool";
+
+        /// <summary>
+        /// 会话索引或元数据变更（创建、删除、重命名等）的服务端推送事件（<c>type:&quot;event&quot;</c>）。
+        /// </summary>
+        /// <remarks>
+        /// 是否接收该事件由 <see cref="Methods.SessionsSubscribe"/> / <see cref="Methods.SessionsUnsubscribe"/> 控制，
+        /// 二者是作用于当前连接的「事件订阅开关」请求（官方：toggle session change event subscriptions），不是本常量所代表的事件帧。
+        /// </remarks>
+        public const string SessionsChanged = "sessions.changed";
 
         /// <summary>通配符事件，匹配所有未被特定处理器消费的事件</summary>
         public const string Wildcard = "*";

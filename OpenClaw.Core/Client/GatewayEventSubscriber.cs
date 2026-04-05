@@ -46,8 +46,8 @@ public sealed class GatewayEventSubscriber
 
     /// <summary>
     /// 一次性注册所有已知的网关事件处理器。
-    /// 包括：连接挑战、Agent 流式输出、聊天状态变更、在线状态、心跳、
-    /// 定时任务、节点/设备配对、语音唤醒、执行审批、系统更新等事件。
+    /// 包括：连接挑战、Agent 流式输出、聊天与 chat.inject、会话 transcript（session.message / session.tool）、
+    /// sessions.changed、在线状态、tick、定时任务、节点/设备配对、语音唤醒、执行/插件审批、系统更新等事件。
     /// 最后注册通配符处理器，用于捕获未知事件类型并记录日志。
     /// </summary>
     public void RegisterAll()
@@ -55,6 +55,10 @@ public sealed class GatewayEventSubscriber
         RegisterConnectChallenge();
         RegisterAgent();
         RegisterChat();
+        RegisterChatInject();
+        RegisterSessionMessage();
+        RegisterSessionTool();
+        RegisterSessionsChanged();
         RegisterPresence();
         RegisterTick();
         RegisterTalkMode();
@@ -70,6 +74,8 @@ public sealed class GatewayEventSubscriber
         RegisterVoicewakeChanged();
         RegisterExecApprovalRequested();
         RegisterExecApprovalResolved();
+        RegisterPluginApprovalRequested();
+        RegisterPluginApprovalResolved();
         RegisterUpdateAvailable();
         RegisterWildcard();
     }
@@ -144,6 +150,7 @@ public sealed class GatewayEventSubscriber
 
     /// <summary>
     /// 注册 chat 事件处理器。监听聊天状态变更（pending → streaming → final），
+    /// 同时识别同属 chat 事件族的 transcript 子类型（例如 kind/type 为 inject 的 UI 注入），
     /// 当状态变为 final 时触发 <see cref="ChatTurnCompleted"/> 回调，通知调用方本轮对话已完成。
     /// </summary>
     private void RegisterChat()
@@ -154,12 +161,92 @@ public sealed class GatewayEventSubscriber
 
             var state = p.TryGetProperty("state", out var st) ? st.GetString() : null;
             var sessionKey = p.TryGetProperty("sessionKey", out var sk) ? sk.GetString() : null;
+            // 部分网关在同一 event=chat 下用 kind 或 type 区分 inject 等 transcript 子事件
+            var kind = p.TryGetProperty("kind", out var k) ? k.GetString() : null;
+            var type = p.TryGetProperty("type", out var tp) ? tp.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.Chat, $"state={state}, session={sessionKey}");
+            Log.Event(GatewayConstants.Events.Chat,
+                $"state={state}, session={sessionKey}, kind={kind ?? "-"}, type={type ?? "-"}");
 
             if (state == GatewayConstants.ChatStates.Final)
                 ChatTurnCompleted?.Invoke();
 
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
+    /// 注册 chat.inject 事件处理器。UI 向 transcript 注入消息等场景下网关可能单独推送此事件名。
+    /// </summary>
+    private void RegisterChatInject()
+    {
+        _client.OnEvent(GatewayConstants.Events.ChatInject, evt =>
+        {
+            if (evt.Payload is not { } p) return Task.CompletedTask;
+
+            var sessionKey = p.TryGetProperty("sessionKey", out var sk) ? sk.GetString() : null;
+            var role = p.TryGetProperty("role", out var r) ? r.GetString() : null;
+            var messageId = p.TryGetProperty("messageId", out var m) ? m.GetString() : null;
+
+            Log.Event(GatewayConstants.Events.ChatInject,
+                $"session={sessionKey}, role={role}, messageId={Truncate(messageId ?? "", 24)}");
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
+    /// 注册 session.message 事件处理器。订阅会话后收到 transcript 消息新增或更新。
+    /// </summary>
+    private void RegisterSessionMessage()
+    {
+        _client.OnEvent(GatewayConstants.Events.SessionMessage, evt =>
+        {
+            if (evt.Payload is not { } p) return Task.CompletedTask;
+
+            var sessionKey = p.TryGetProperty("sessionKey", out var sk) ? sk.GetString() : null;
+            var messageId = p.TryGetProperty("messageId", out var mid) ? mid.GetString() : null;
+            var role = p.TryGetProperty("role", out var r) ? r.GetString() : null;
+
+            Log.Event(GatewayConstants.Events.SessionMessage,
+                $"session={sessionKey}, messageId={Truncate(messageId ?? "", 24)}, role={role}");
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
+    /// 注册 session.tool 事件处理器。订阅会话后收到工具调用或工具流相关事件流片段。
+    /// </summary>
+    private void RegisterSessionTool()
+    {
+        _client.OnEvent(GatewayConstants.Events.SessionTool, evt =>
+        {
+            if (evt.Payload is not { } p) return Task.CompletedTask;
+
+            var sessionKey = p.TryGetProperty("sessionKey", out var sk) ? sk.GetString() : null;
+            var toolCallId = p.TryGetProperty("toolCallId", out var tc) ? tc.GetString() : null;
+            var toolName = p.TryGetProperty("toolName", out var tn) ? tn.GetString() : null;
+            var phase = p.TryGetProperty("phase", out var ph) ? ph.GetString() : null;
+
+            Log.Event(GatewayConstants.Events.SessionTool,
+                $"session={sessionKey}, toolCallId={Truncate(toolCallId ?? "", 20)}, tool={toolName}, phase={phase}");
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
+    /// 注册 sessions.changed 事件处理器。会话列表索引或会话元数据发生变化时推送。
+    /// </summary>
+    private void RegisterSessionsChanged()
+    {
+        _client.OnEvent(GatewayConstants.Events.SessionsChanged, evt =>
+        {
+            if (evt.Payload is not { } p) return Task.CompletedTask;
+
+            var reason = p.TryGetProperty("reason", out var r) ? r.GetString() : null;
+            var sessionKey = p.TryGetProperty("sessionKey", out var sk) ? sk.GetString() : null;
+
+            Log.Event(GatewayConstants.Events.SessionsChanged,
+                $"reason={reason}, session={sessionKey}, keys=[{GetKeys(p)}]");
             return Task.CompletedTask;
         });
     }
@@ -430,6 +517,43 @@ public sealed class GatewayEventSubscriber
     }
 
     /// <summary>
+    /// 注册 plugin_approval_requested 事件处理器。当插件发起自定义审批请求时收到此事件，
+    /// 记录审批 ID、插件名称和操作描述。
+    /// </summary>
+    private void RegisterPluginApprovalRequested()
+    {
+        _client.OnEvent(GatewayConstants.Events.PluginApprovalRequested, evt =>
+        {
+            if (evt.Payload is not { } p) return Task.CompletedTask;
+
+            var approvalId = p.TryGetProperty("approvalId", out var a) ? a.GetString() : null;
+            var plugin = p.TryGetProperty("plugin", out var pl) ? pl.GetString() : null;
+            var description = p.TryGetProperty("description", out var d) ? d.GetString() : null;
+
+            Log.Event(GatewayConstants.Events.PluginApprovalRequested, $"approvalId={approvalId}, plugin={plugin}, description={Truncate(description ?? "", 60)}");
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
+    /// 注册 plugin_approval_resolved 事件处理器。当插件审批请求被批准或拒绝时收到此事件，
+    /// 记录审批 ID 和决定结果。
+    /// </summary>
+    private void RegisterPluginApprovalResolved()
+    {
+        _client.OnEvent(GatewayConstants.Events.PluginApprovalResolved, evt =>
+        {
+            if (evt.Payload is not { } p) return Task.CompletedTask;
+
+            var approvalId = p.TryGetProperty("approvalId", out var a) ? a.GetString() : null;
+            var decision = p.TryGetProperty("decision", out var d) ? d.GetString() : null;
+
+            Log.Event(GatewayConstants.Events.PluginApprovalResolved, $"approvalId={approvalId}, decision={decision}");
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
     /// 注册 update_available 事件处理器。当网关检测到可用更新时收到此事件，
     /// 以警告级别记录当前版本、最新版本和更新渠道。
     /// </summary>
@@ -475,6 +599,10 @@ public sealed class GatewayEventSubscriber
         GatewayConstants.Events.ConnectChallenge,
         GatewayConstants.Events.Agent,
         GatewayConstants.Events.Chat,
+        GatewayConstants.Events.ChatInject,
+        GatewayConstants.Events.SessionMessage,
+        GatewayConstants.Events.SessionTool,
+        GatewayConstants.Events.SessionsChanged,
         GatewayConstants.Events.Presence,
         GatewayConstants.Events.Tick,
         GatewayConstants.Events.TalkMode,
@@ -490,6 +618,8 @@ public sealed class GatewayEventSubscriber
         GatewayConstants.Events.VoicewakeChanged,
         GatewayConstants.Events.ExecApprovalRequested,
         GatewayConstants.Events.ExecApprovalResolved,
+        GatewayConstants.Events.PluginApprovalRequested,
+        GatewayConstants.Events.PluginApprovalResolved,
         GatewayConstants.Events.UpdateAvailable,
     ];
 

@@ -94,7 +94,7 @@ try
     await client.SessionsListAsync(cts.Token);
     await client.ChannelsStatusAsync(cts.Token);
     await client.TtsStatusAsync(cts.Token);
-    await client.SkillsStatusAsync(cts.Token);
+    await client.SkillsStatusAsync(ct: cts.Token);
     await client.CronListAsync(cts.Token);
     await client.NodeListAsync(cts.Token);
     await client.DevicePairListAsync(cts.Token);
@@ -103,7 +103,7 @@ try
     await client.VoicewakeGetAsync(cts.Token);
     await client.LastHeartbeatAsync(cts.Token);
     await client.UsageStatusAsync(cts.Token);
-    await client.TalkConfigAsync(cts.Token);
+    await client.TalkConfigAsync(ct: cts.Token);
     await client.AgentIdentityGetAsync(cts.Token);
     await client.SystemPresenceAsync(cts.Token);
     await client.ToolsCatalogAsync(cts.Token);
@@ -111,7 +111,16 @@ try
     await client.CronStatusAsync(cts.Token);
     await client.DoctorMemoryStatusAsync(cts.Token);
     await client.TtsProvidersAsync(cts.Token);
-    await client.UsageCostAsync(cts.Token);
+    await client.UsageCostAsync(ct: cts.Token);
+    var probeSession = client.HelloOk?.Snapshot?.SessionDefaults?.MainSessionKey ?? GatewayConstants.DefaultSessionKey;
+    await client.SessionsGetAsync(probeSession, cts.Token);
+    await client.SessionsResolveAsync(probeSession, cts.Token);
+    await client.SessionsPreviewAsync(probeSession, cts.Token);
+    await client.SessionsSubscribeAsync(cts.Token);
+    await client.SessionsMessagesSubscribeAsync(probeSession, cts.Token);
+    await client.SessionsUsageAsync(probeSession, cts.Token);
+    await client.SessionsUsageTimeseriesAsync(probeSession, ct: cts.Token);
+    await client.SessionsUsageLogsAsync(probeSession, ct: cts.Token);
 }
 catch (Exception ex) when (ex is not OperationCanceledException)
 {

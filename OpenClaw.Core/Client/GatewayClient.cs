@@ -38,7 +38,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
     public HelloOkPayload? HelloOk => _helloOk;
 
     /// <summary>
-    /// Available RPC methods reported by the server.
+    /// hello-ok 中声明的可通过 <c>type:&quot;req&quot;</c> 调用的 <c>method</c> 名称列表（含仅用于开关事件推送的指令，如 <c>sessions.subscribe</c>）。
     /// </summary>
     public IReadOnlyList<string> AvailableMethods => _helloOk?.Features?.Methods ?? [];
 
@@ -46,6 +46,33 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// Available event types reported by the server.
     /// </summary>
     public IReadOnlyList<string> AvailableEvents => _helloOk?.Features?.Events ?? [];
+
+    /// <summary>
+    /// 判断某 <c>req.method</c> 是否出现在 hello-ok 的 <c>features.methods</c> 中。
+    /// </summary>
+    /// <remarks>
+    /// <c>sessions.subscribe</c> 等名称在协议里属于「事件订阅开关」请求，但仍在 <c>methods</c> 清单中登记（若网关实现）；
+    /// 与 <c>features.events</c> 里列出的可推送事件名（如 <c>sessions.changed</c>）不是同一概念。
+    /// </remarks>
+    /// <param name="method">完整 <c>req.method</c> 字符串，与 <see cref="GatewayConstants.Methods"/> 常量一致。</param>
+    /// <returns>
+    /// <c>null</c>：尚未握手或方法列表为空/缺失，无法判断，调用方通常仍应发起 RPC 以兼容旧服务端；
+    /// <c>true</c>：已声明；<c>false</c>：列表非空且未包含该方法。
+    /// </returns>
+    public bool? IsRpcMethodAdvertised(string method)
+    {
+        var methods = _helloOk?.Features?.Methods;
+        if (methods is null || methods.Length == 0)
+            return null;
+
+        foreach (var m in methods)
+        {
+            if (string.Equals(m, method, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// 初始化网关客户端，注入配置、请求管理器、事件路由器和设备身份。
