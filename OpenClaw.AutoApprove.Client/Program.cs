@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using OpenClaw.AutoApprove;
+using OpenClaw.AutoApprove.Core;
+using OpenClaw.AutoApprove.Core.Extensions;
 using OpenClaw.Core.Extensions;
 using OpenClaw.Core.Logging;
 using OpenClaw.Core.Models;
@@ -26,10 +27,7 @@ builder.Services.PostConfigure<GatewayOptions>(opts =>
 
 // ─── Register AutoApprove Service ───────────────────────
 
-builder.Services.AddOptions<AutoApproveOptions>()
-    .Bind(builder.Configuration.GetSection(AutoApproveOptions.SectionName));
-
-builder.Services.AddHostedService<AutoApproveService>();
+builder.Services.AddAutoApprove(builder.Configuration.GetSection(AutoApproveOptions.SectionName));
 
 // ─── Build & Run ────────────────────────────────────────
 

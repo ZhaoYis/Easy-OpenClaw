@@ -4,7 +4,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenClaw.Core", "OpenClaw.C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenClaw.Gateway.Client", "OpenClaw.Gateway.Client\OpenClaw.Gateway.Client.csproj", "{0C89F08E-3129-4DAD-9DC7-11CDC200C5BC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenClaw.AutoApprove", "OpenClaw.AutoApprove\OpenClaw.AutoApprove.csproj", "{91CFE4B3-E800-4B14-AED8-20604A6CA51E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenClaw.AutoApprove.Core", "OpenClaw.AutoApprove.Core\OpenClaw.AutoApprove.Core.csproj", "{B2D3E4F5-A6B7-8901-CDEF-234567890ABC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenClaw.AutoApprove.Client", "OpenClaw.AutoApprove.Client\OpenClaw.AutoApprove.Client.csproj", "{91CFE4B3-E800-4B14-AED8-20604A6CA51E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BFF0600B-CB2F-4E66-9C23-D3DE7AED82A9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D7289F8D-49F9-4C7F-ACE0-5546A3B2611B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -20,9 +26,17 @@ Global
 		{0C89F08E-3129-4DAD-9DC7-11CDC200C5BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0C89F08E-3129-4DAD-9DC7-11CDC200C5BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0C89F08E-3129-4DAD-9DC7-11CDC200C5BC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2D3E4F5-A6B7-8901-CDEF-234567890ABC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2D3E4F5-A6B7-8901-CDEF-234567890ABC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2D3E4F5-A6B7-8901-CDEF-234567890ABC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2D3E4F5-A6B7-8901-CDEF-234567890ABC}.Release|Any CPU.Build.0 = Release|Any CPU
 		{91CFE4B3-E800-4B14-AED8-20604A6CA51E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{91CFE4B3-E800-4B14-AED8-20604A6CA51E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{91CFE4B3-E800-4B14-AED8-20604A6CA51E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{91CFE4B3-E800-4B14-AED8-20604A6CA51E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{B2D3E4F5-A6B7-8901-CDEF-234567890ABC} = {BFF0600B-CB2F-4E66-9C23-D3DE7AED82A9}
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890} = {BFF0600B-CB2F-4E66-9C23-D3DE7AED82A9}
 	EndGlobalSection
 EndGlobal

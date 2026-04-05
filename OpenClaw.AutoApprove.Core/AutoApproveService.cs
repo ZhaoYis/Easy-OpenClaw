@@ -7,7 +7,7 @@ using OpenClaw.Core.Helpers;
 using OpenClaw.Core.Logging;
 using OpenClaw.Core.Models;
 
-namespace OpenClaw.AutoApprove;
+namespace OpenClaw.AutoApprove.Core;
 
 /// <summary>
 /// 后台服务：连接网关后轮询 device.pair.list 并自动批准所有待审批的配对请求。

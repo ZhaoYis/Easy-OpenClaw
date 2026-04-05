@@ -1,4 +1,4 @@
-namespace OpenClaw.AutoApprove;
+namespace OpenClaw.AutoApprove.Core;
 
 /// <summary>
 /// 自动审批服务的配置选项。
