@@ -6,9 +6,10 @@ using OpenClaw.Core.Models;
 namespace OpenClaw.Core.Transport;
 
 /// <summary>
-/// Low-level WebSocket transport: connect, send text frames, receive loop.
+/// WebSocket 传输实现：连接、发送文本帧、接收循环。
+/// 类非 sealed，便于单元测试中通过子类覆写 <see cref="SendAsync"/> 等成员模拟出站流量。
 /// </summary>
-public sealed class WebSocketClient : IAsyncDisposable
+public class WebSocketClient : IAsyncDisposable
 {
     private readonly Uri _uri;
     private ClientWebSocket? _ws;
@@ -19,7 +20,8 @@ public sealed class WebSocketClient : IAsyncDisposable
     public event Func<WebSocketCloseStatus?, string?, Task>? OnClosed;
     public event Func<Exception, Task>? OnError;
 
-    public bool IsConnected =>
+    /// <summary>当前底层套接字是否处于 Open 状态；可在测试中覆写以模拟已连接。</summary>
+    public virtual bool IsConnected =>
         _ws?.State == WebSocketState.Open;
 
     public WebSocketClient(Uri uri)
@@ -41,7 +43,8 @@ public sealed class WebSocketClient : IAsyncDisposable
         _receiveTask = Task.Run(() => ReceiveLoopAsync(_receiveCts.Token), _receiveCts.Token);
     }
 
-    public async Task SendAsync(string json, CancellationToken ct = default)
+    /// <summary>发送一条文本帧；可在测试中覆写以记录 JSON 并回注伪造响应。</summary>
+    public virtual async Task SendAsync(string json, CancellationToken ct = default)
     {
         if (_ws is null || _ws.State != WebSocketState.Open)
             throw new InvalidOperationException("WebSocket is not connected.");

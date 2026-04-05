@@ -709,6 +709,20 @@ public sealed partial class GatewayClient : IAsyncDisposable
         return "";
     }
 
+    // ─── 单元测试专用钩子（InternalsVisibleTo）────────────────
+
+    /// <summary>
+    /// 仅用于单元测试：将入站 JSON 走与真实 WebSocket 相同的消息管线（响应帧 / 事件帧分发）。
+    /// </summary>
+    /// <param name="json">模拟 WebSocket 收到的原始 JSON 文本</param>
+    internal Task SimulateIncomingJsonForTests(string json) => OnRawMessage(json);
+
+    /// <summary>
+    /// 仅用于单元测试：挂载可替换的 <see cref="WebSocketClient"/>（通常为子类，用于捕获出站请求并回写响应）。
+    /// </summary>
+    /// <param name="webSocket">模拟或桩实现的 WebSocket 客户端</param>
+    internal void AttachWebSocketForTests(WebSocketClient webSocket) => _ws = webSocket;
+
     // ─── Dispose ────────────────────────────────────────────
 
     /// <summary>
