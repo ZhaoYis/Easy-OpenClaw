@@ -57,6 +57,19 @@ Easy-OpenClaw/
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - 运行中的 OpenClaw Gateway 实例
 
+## 与上游 OpenClaw 网关版本对应关系
+
+本仓库**不**单独维护与 OpenClaw Gateway **发行版号**（如 npm/Git tag）的一一映射表；与上游的契约对齐以源码中的常量和握手行为为准。部署时请使用与下列约定**同期或兼容**的 Gateway 构建；若网关升级后出现握手失败、RPC 校验错误或字段不匹配，应同步更新本仓库中的协议常量、模型与 `DefaultClientVersion`，并参考 [OpenClaw](https://openclaw.ai) 官方说明。
+
+| 维度 | 本仓库当前约定 | 代码位置（便于对照与升级） |
+|------|----------------|----------------------------|
+| 连接握手协议版本 | WebSocket 帧协议 **`3`**（`connect` 请求中 `minProtocol` / `maxProtocol` 均为该值） | `GatewayConstants.Protocol.Version` |
+| 客户端版本字符串 | **`2026.3.13`**（握手时随 `connect` 上报，网关可据此做特性判断） | `GatewayConstants.DefaultClientVersion` → `GatewayOptions.ClientVersion` |
+| 设备身份签名 | **`v2`** 载荷格式（Ed25519，`base64url`） | `GatewayConstants.Signature.VersionPrefix`，`DeviceIdentity` |
+| 能力声明（caps） | 默认包含 **`tool-events`**（工具相关流式事件） | `GatewayConstants.Protocol.CapToolEvents`，`ConnectParams.Caps` |
+
+**维护建议**：升级或更换 Gateway 后，优先在网关侧查看握手返回的 `protocol` / `version` 与错误信息；若上游调整了协议号、客户端版本字符串或 RPC schema，请在本仓库中更新对应常量与 `OpenClaw.Core/Models` 下的参数模型，并运行 `dotnet test` 回归。
+
 ## 快速开始
 
 ### 1. 克隆项目
