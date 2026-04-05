@@ -103,6 +103,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
                 _state = ConnectionState.WaitingForApproval;
                 throw new NotPairedException(errText, connectResp.Error);
             }
+
             throw new InvalidOperationException($"connect 失败: {errText}");
         }
 
@@ -538,7 +539,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         _device.Dispose();
         _requests.CancelAll();
-        _lifetimeCts?.Cancel();
+        await _lifetimeCts?.CancelAsync();
         _lifetimeCts?.Dispose();
 
         if (_ws is not null)
