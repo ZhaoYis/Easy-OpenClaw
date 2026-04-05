@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using NSec.Cryptography;
 using OpenClaw.Core.Logging;
+using OpenClaw.Core.Models;
 
 namespace OpenClaw.Core.Client;
 
@@ -24,6 +25,11 @@ public sealed class DeviceIdentity : IDisposable
     public string DeviceId { get; }
     public string PublicKeyBase64Url { get; }
 
+    /// <summary>
+    /// 私有构造函数，从已有的 Ed25519 签名密钥初始化设备身份。
+    /// 导出原始公钥字节，计算 base64url 编码的公钥和 SHA-256 哈希的设备 ID。
+    /// </summary>
+    /// <param name="signingKey">Ed25519 签名密钥（包含私钥和公钥）</param>
     private DeviceIdentity(Key signingKey)
     {
         _signingKey = signingKey;
@@ -33,6 +39,13 @@ public sealed class DeviceIdentity : IDisposable
         DeviceId = Convert.ToHexString(SHA256.HashData(_rawPublicKey)).ToLowerInvariant();
     }
 
+    /// <summary>
+    /// 从指定路径加载已有的 Ed25519 密钥，或在密钥不存在时生成新密钥并持久化到磁盘。
+    /// 密钥以十六进制编码的原始私钥种子（32 字节）形式存储在文件中。
+    /// 若 <paramref name="keyFilePath"/> 为 null，则生成临时内存密钥，不写入磁盘。
+    /// </summary>
+    /// <param name="keyFilePath">密钥文件路径（可选）。为 null 时生成临时密钥</param>
+    /// <returns>已初始化的 <see cref="DeviceIdentity"/> 实例</returns>
     public static DeviceIdentity LoadOrCreate(string? keyFilePath)
     {
         if (keyFilePath is not null && File.Exists(keyFilePath))
@@ -82,7 +95,7 @@ public sealed class DeviceIdentity : IDisposable
         var signedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var scopesJoined = string.Join(",", scopes);
 
-        var payload = $"v2|{DeviceId}|{clientId}|{clientMode}|{role}|{scopesJoined}|{signedAt}|{token}|{nonce}";
+        var payload = $"{GatewayConstants.Signature.VersionPrefix}|{DeviceId}|{clientId}|{clientMode}|{role}|{scopesJoined}|{signedAt}|{token}|{nonce}";
 
         Log.Debug($"签名 payload: {payload[..Math.Min(payload.Length, 80)]}...");
 
@@ -108,15 +121,27 @@ public sealed class DeviceIdentity : IDisposable
             .Replace('/', '_');
     }
 
+    /// <summary>
+    /// 释放底层 Ed25519 签名密钥占用的非托管资源，确保密钥材料从内存中安全清除。
+    /// </summary>
     public void Dispose()
     {
         _signingKey.Dispose();
     }
 }
 
+/// <summary>
+/// Ed25519 签名结果，包含 base64url 编码的签名值、签名时间戳和随机 nonce。
+/// 用于网关握手阶段的设备身份验证。
+/// </summary>
 public sealed record DeviceSignature
 {
+    /// <summary>签名值，base64url 无填充编码的 64 字节 Ed25519 签名</summary>
     public required string Signature { get; init; }
+
+    /// <summary>签名生成时的 Unix 时间戳（毫秒），用于防止重放攻击</summary>
     public required long SignedAt { get; init; }
+
+    /// <summary>服务端下发的随机 nonce，确保每次签名唯一</summary>
     public required string Nonce { get; init; }
 }

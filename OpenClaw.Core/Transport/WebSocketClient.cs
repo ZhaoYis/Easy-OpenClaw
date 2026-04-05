@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Net.WebSockets;
 using System.Text;
+using OpenClaw.Core.Models;
 
 namespace OpenClaw.Core.Transport;
 
@@ -30,9 +31,9 @@ public sealed class WebSocketClient : IAsyncDisposable
     {
         _ws?.Dispose();
         _ws = new ClientWebSocket();
-        _ws.Options.SetRequestHeader("Origin", "http://localhost");
-        _ws.Options.SetRequestHeader("User-Agent", "OpenClaw-CSharp-Client/1.0");
-        _ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+        _ws.Options.SetRequestHeader("Origin", GatewayConstants.Transport.Origin);
+        _ws.Options.SetRequestHeader("User-Agent", GatewayConstants.Transport.DefaultUserAgent);
+        _ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(GatewayConstants.Transport.KeepAliveIntervalSeconds);
 
         await _ws.ConnectAsync(_uri, ct);
 
@@ -59,7 +60,7 @@ public sealed class WebSocketClient : IAsyncDisposable
         {
             try
             {
-                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", ct);
+                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, GatewayConstants.Transport.CloseDescription, ct);
             }
             catch
             {
@@ -84,7 +85,7 @@ public sealed class WebSocketClient : IAsyncDisposable
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
     {
-        var buffer = ArrayPool<byte>.Shared.Rent(8192);
+        var buffer = ArrayPool<byte>.Shared.Rent(GatewayConstants.Transport.ReceiveBufferSize);
         try
         {
             while (!ct.IsCancellationRequested && _ws?.State == WebSocketState.Open)

@@ -47,6 +47,14 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// </summary>
     public IReadOnlyList<string> AvailableEvents => _helloOk?.Features?.Events ?? [];
 
+    /// <summary>
+    /// 初始化网关客户端，注入配置、请求管理器、事件路由器和设备身份。
+    /// 构造时尝试从磁盘加载缓存的 DeviceToken 以支持免审批重连。
+    /// </summary>
+    /// <param name="options">网关连接配置（URL、认证信息、超时等）</param>
+    /// <param name="gatewayRequests">请求/响应关联管理器</param>
+    /// <param name="events">事件分发路由器</param>
+    /// <param name="device">Ed25519 设备身份，用于握手签名</param>
     public GatewayClient(
         IOptions<GatewayOptions> options,
         GatewayRequestManager gatewayRequests,
@@ -67,6 +75,18 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     // ─── Public API ────────────────────────────────────────
 
+    /// <summary>
+    /// 建立到网关的 WebSocket 连接并完成完整握手流程：
+    /// 1. 建立 WebSocket 传输层连接
+    /// 2. 等待服务端下发 connect_challenge 事件（含 nonce）
+    /// 3. 使用 Ed25519 签名 nonce 并发送 connect 请求
+    /// 4. 处理 hello-ok 响应，提取服务端能力和认证信息
+    /// 若设备未配对（NOT_PAIRED），抛出 <see cref="NotPairedException"/>。
+    /// </summary>
+    /// <param name="ct">取消令牌，可用于中断连接流程</param>
+    /// <exception cref="NotPairedException">设备未配对时抛出</exception>
+    /// <exception cref="InvalidOperationException">连接因其他原因失败时抛出</exception>
+    /// <exception cref="TimeoutException">等待 challenge 超过 10 秒时抛出</exception>
     public async Task ConnectAsync(CancellationToken ct = default)
     {
         _state = ConnectionState.Connecting;
@@ -74,7 +94,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         var challengeTcs = new TaskCompletionSource<GatewayEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        _events.On("connect.challenge", evt =>
+        _events.On(GatewayConstants.Events.ConnectChallenge, evt =>
         {
             challengeTcs.TrySetResult(evt);
             return Task.CompletedTask;
@@ -82,7 +102,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         await ConnectTransportAsync(_lifetimeCts.Token);
 
-        Log.Info("等待 connect.challenge ...");
+        Log.Info($"等待 {GatewayConstants.Events.ConnectChallenge} ...");
 
         var challengeEvt = await challengeTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), _lifetimeCts.Token);
         Log.Success("收到 challenge");
@@ -95,10 +115,10 @@ public sealed partial class GatewayClient : IAsyncDisposable
             Log.Debug($"  nonce={nonce}, ts={ts}");
         }
 
-        _events.Off("connect.challenge");
+        _events.Off(GatewayConstants.Events.ConnectChallenge);
 
         var connectParams = BuildConnectParams(nonce);
-        var connectResp = await SendRequestAsync("connect", connectParams, _lifetimeCts.Token);
+        var connectResp = await SendRequestAsync(GatewayConstants.Methods.Connect, connectParams, _lifetimeCts.Token);
 
         if (!connectResp.Ok)
         {
@@ -161,6 +181,12 @@ public sealed partial class GatewayClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// 基于重试次数计算指数退避延迟时间。
+    /// 公式：delay = min(baseDelay * 1.5^(attempt-1), maxDelay)。
+    /// </summary>
+    /// <param name="attempt">当前重试次数（从 1 开始）</param>
+    /// <returns>计算出的延迟时间</returns>
     private TimeSpan CalculateBackoff(int attempt)
     {
         var baseMs = _options.PairingRetryDelay.TotalMilliseconds;
@@ -169,6 +195,16 @@ public sealed partial class GatewayClient : IAsyncDisposable
         return TimeSpan.FromMilliseconds(delayMs);
     }
 
+    /// <summary>
+    /// 发送带有强类型参数的 RPC 请求到网关。
+    /// 自动生成唯一请求 ID，将参数序列化为 JSON，通过 WebSocket 发送，
+    /// 并返回一个 Task 等待对应 ID 的响应到达。
+    /// </summary>
+    /// <typeparam name="T">请求参数类型，将被 JSON 序列化</typeparam>
+    /// <param name="method">RPC 方法名（如 "chat.send"）</param>
+    /// <param name="parameters">请求参数对象</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>网关响应，包含成功/失败状态和载荷数据</returns>
     public async Task<GatewayResponse> SendRequestAsync<T>(string method, T parameters, CancellationToken ct = default)
     {
         var (id, task) = _gatewayRequests.Register(_options.RequestTimeout);
@@ -188,11 +224,27 @@ public sealed partial class GatewayClient : IAsyncDisposable
         return await task;
     }
 
+    /// <summary>
+    /// 发送带有原始 <see cref="JsonElement"/> 参数的 RPC 请求到网关。
+    /// 适用于参数已经是 JSON 结构的场景，避免二次序列化。
+    /// </summary>
+    /// <param name="method">RPC 方法名</param>
+    /// <param name="parameters">已序列化的 JSON 参数</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>网关响应</returns>
     public Task<GatewayResponse> SendRequestAsync(string method, JsonElement parameters, CancellationToken ct = default)
     {
         return SendRequestRawAsync(method, parameters, ct);
     }
 
+    /// <summary>
+    /// 内部原始请求发送方法。注册请求到 <see cref="GatewayRequestManager"/>，
+    /// 构建 <see cref="GatewayRequest"/> 帧并通过 WebSocket 发送，返回响应 Task。
+    /// </summary>
+    /// <param name="method">RPC 方法名</param>
+    /// <param name="parameters">JSON 格式的请求参数</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>网关响应</returns>
     internal async Task<GatewayResponse> SendRequestRawAsync(string method, JsonElement parameters, CancellationToken ct)
     {
         var (id, task) = _gatewayRequests.Register(_options.RequestTimeout);
@@ -211,25 +263,46 @@ public sealed partial class GatewayClient : IAsyncDisposable
         return await task;
     }
 
+    /// <summary>
+    /// 注册一个网关事件处理器。当收到指定名称的事件时，异步调用 handler。
+    /// 同一事件可注册多个处理器，使用 "*" 可订阅所有事件。
+    /// </summary>
+    /// <param name="eventName">要监听的事件名称（如 "agent"、"chat"、"*" 等）</param>
+    /// <param name="handler">异步事件处理回调</param>
     public void OnEvent(string eventName, Func<GatewayEvent, Task> handler)
         => _events.On(eventName, handler);
 
+    /// <summary>
+    /// 便捷的聊天发送方法。向指定会话发送用户消息，触发 Agent 生成回复。
+    /// 若未指定 sessionKey，自动使用服务端下发的默认会话键。
+    /// </summary>
+    /// <param name="userMessage">用户消息文本</param>
+    /// <param name="sessionKey">目标会话键，为 null 时自动选择默认会话</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>网关响应，表示消息是否成功入队处理</returns>
     public Task<GatewayResponse> ChatAsync(string userMessage, string? sessionKey = null, CancellationToken ct = default)
     {
         var key = sessionKey
                   ?? _helloOk?.Snapshot?.SessionDefaults?.MainSessionKey
-                  ?? "agent:main:main";
+                  ?? GatewayConstants.DefaultSessionKey;
 
         var param = new ChatSendParams
         {
             SessionKey = key,
             Message = userMessage,
         };
-        return SendRequestAsync("chat.send", param, ct);
+        return SendRequestAsync(GatewayConstants.Methods.ChatSend, param, ct);
     }
 
     // ─── hello-ok Processing ───────────────────────────────
 
+    /// <summary>
+    /// 解析 connect 请求返回的 hello-ok 载荷，提取服务端信息并缓存。
+    /// 处理内容包括：服务端版本/连接 ID、支持的方法和事件列表、策略参数、
+    /// 认证结果（角色/权限/DeviceToken）以及系统快照（运行状态、会话默认值等）。
+    /// 若响应中包含新的 DeviceToken，自动持久化到磁盘供后续免审批重连使用。
+    /// </summary>
+    /// <param name="resp">connect 请求的网关响应</param>
     private void ProcessHelloOk(GatewayResponse resp)
     {
         if (resp.Payload is not { } payload) return;
@@ -266,6 +339,12 @@ public sealed partial class GatewayClient : IAsyncDisposable
             LogSnapshotHighlights(snap);
     }
 
+    /// <summary>
+    /// 将 hello-ok 中的系统快照关键信息输出到日志：
+    /// 网关运行时间、认证模式、可用更新、默认 Agent/会话、在线设备数、
+    /// 健康状态（子系统通道、Agent 数量、会话数量）以及配置路径等。
+    /// </summary>
+    /// <param name="snapshot">系统快照信息</param>
     private static void LogSnapshotHighlights(SnapshotInfo snapshot)
     {
         if (snapshot.UptimeMs is { } ms)
@@ -317,6 +396,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     // ─── DeviceToken Persistence ───────────────────────────
 
+    /// <summary>
+    /// 从磁盘文件加载缓存的 DeviceToken。
+    /// DeviceToken 是服务端在首次配对成功后下发的令牌，持有后可跳过审批直接重连。
+    /// </summary>
+    /// <returns>缓存的 DeviceToken 字符串，文件不存在或为空时返回 null</returns>
     private string? LoadDeviceToken()
     {
         var path = _options.DeviceTokenFilePath;
@@ -333,6 +417,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// 将 DeviceToken 持久化到磁盘文件，供后续应用重启时免审批重连使用。
+    /// 自动创建父目录（若不存在）。写入失败时仅记录警告，不抛出异常。
+    /// </summary>
+    /// <param name="token">要保存的 DeviceToken 字符串</param>
     private void PersistDeviceToken(string token)
     {
         var path = _options.DeviceTokenFilePath;
@@ -353,6 +442,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     // ─── Transport ─────────────────────────────────────────
 
+    /// <summary>
+    /// 建立底层 WebSocket 传输连接。
+    /// 若已有旧连接则先释放，然后创建新的 <see cref="WebSocketClient"/> 并绑定消息、关闭、错误回调。
+    /// </summary>
+    /// <param name="ct">取消令牌</param>
     private async Task ConnectTransportAsync(CancellationToken ct)
     {
         if (_ws is not null)
@@ -368,6 +462,12 @@ public sealed partial class GatewayClient : IAsyncDisposable
         Log.Success("WebSocket 已连接");
     }
 
+    /// <summary>
+    /// WebSocket 原始消息处理入口。将 JSON 字符串反序列化为 <see cref="RawFrame"/>，
+    /// 根据帧类型分发到 <see cref="HandleResponse"/> 或 <see cref="HandleEvent"/>。
+    /// JSON 解析失败时记录错误日志但不抛出异常，确保连接不会因单条消息错误而断开。
+    /// </summary>
+    /// <param name="json">WebSocket 接收到的原始 JSON 字符串</param>
     private async Task OnRawMessage(string json)
     {
         try
@@ -377,11 +477,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
             switch (raw.Type)
             {
-                case "res":
+                case GatewayConstants.FrameTypes.Response:
                     HandleResponse(raw);
                     break;
 
-                case "event":
+                case GatewayConstants.FrameTypes.Event:
                     await HandleEvent(raw);
                     break;
 
@@ -396,6 +496,12 @@ public sealed partial class GatewayClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// 处理 "response" 类型的帧。将原始帧转换为 <see cref="GatewayResponse"/>，
+    /// 通过 <see cref="GatewayRequestManager.TryComplete"/> 与对应的请求进行关联。
+    /// 若找不到匹配的待处理请求（可能已超时），记录警告日志。
+    /// </summary>
+    /// <param name="raw">原始响应帧</param>
     private void HandleResponse(RawFrame raw)
     {
         var resp = new GatewayResponse
@@ -413,6 +519,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// 处理 "event" 类型的帧。将原始帧转换为 <see cref="GatewayEvent"/>，
+    /// 通过 <see cref="EventRouter.DispatchAsync"/> 分发到所有已注册的事件处理器。
+    /// </summary>
+    /// <param name="raw">原始事件帧</param>
     private async Task HandleEvent(RawFrame raw)
     {
         var evt = new GatewayEvent
@@ -429,6 +540,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     // ─── Reconnection ──────────────────────────────────────
 
+    /// <summary>
+    /// WebSocket 连接关闭回调。记录关闭原因并触发自动重连逻辑。
+    /// </summary>
+    /// <param name="status">WebSocket 关闭状态码</param>
+    /// <param name="desc">关闭描述信息</param>
     private async Task OnTransportClosed(System.Net.WebSockets.WebSocketCloseStatus? status, string? desc)
     {
         Log.Warn($"WebSocket 关闭: {status} {desc}");
@@ -437,6 +553,10 @@ public sealed partial class GatewayClient : IAsyncDisposable
         await TryReconnectAsync();
     }
 
+    /// <summary>
+    /// WebSocket 传输层错误回调。记录异常信息并触发自动重连逻辑。
+    /// </summary>
+    /// <param name="ex">传输层异常</param>
     private async Task OnTransportError(Exception ex)
     {
         Log.Error($"WebSocket 错误: {ex.Message}");
@@ -445,6 +565,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
         await TryReconnectAsync();
     }
 
+    /// <summary>
+    /// 自动重连逻辑。在连接异常断开后，按配置的重连间隔和最大重试次数尝试恢复连接。
+    /// 跳过以下场景：客户端已释放、正在连接中、等待配对审批、或已取消。
+    /// 每次重连调用 <see cref="ConnectWithRetryAsync"/> 以支持 NOT_PAIRED 场景。
+    /// </summary>
     private async Task TryReconnectAsync()
     {
         if (_disposed
@@ -478,6 +603,16 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     // ─── Helpers ────────────────────────────────────────────
 
+    /// <summary>
+    /// 构建 connect 请求的参数对象。包含：
+    /// - 客户端身份信息（ID、版本、平台、模式）
+    /// - 角色和权限范围
+    /// - 认证令牌（包含缓存的 DeviceToken，若存在）
+    /// - User-Agent 字符串
+    /// - Ed25519 设备签名（对 nonce 签名以证明设备身份）
+    /// </summary>
+    /// <param name="nonce">服务端下发的随机 nonce</param>
+    /// <returns>完整的 connect 请求参数</returns>
     private ConnectParams BuildConnectParams(string nonce)
     {
         var sig = _device.Sign(
@@ -488,10 +623,10 @@ public sealed partial class GatewayClient : IAsyncDisposable
             token: _options.Token,
             nonce: nonce);
 
-        var platform = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "MacIntel"
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Win32"
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux"
-            : "unknown";
+        var platform = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? GatewayConstants.Platforms.MacIntel
+            : RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? GatewayConstants.Platforms.Win32
+            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? GatewayConstants.Platforms.Linux
+            : GatewayConstants.Platforms.Unknown;
 
         var auth = _deviceToken is not null
             ? new AuthInfo { Token = _options.Token, DeviceToken = _deviceToken }
@@ -509,7 +644,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
             Role = _options.Role,
             Scopes = _options.Scopes,
             Auth = auth,
-            UserAgent = $"OpenClaw-CSharp/{_options.ClientVersion} ({RuntimeInformation.OSDescription})",
+            UserAgent = string.Format(GatewayConstants.Transport.UserAgentTemplate, _options.ClientVersion, RuntimeInformation.OSDescription),
             Device = new DeviceInfo
             {
                 Id = _device.DeviceId,
@@ -521,13 +656,25 @@ public sealed partial class GatewayClient : IAsyncDisposable
         };
     }
 
+    /// <summary>
+    /// 检测 connect 错误响应是否为 NOT_PAIRED 错误（设备未配对）。
+    /// 通过在错误 JSON 文本中搜索 NOT_PAIRED 标识符来判断。
+    /// </summary>
+    /// <param name="error">响应中的错误 JSON 元素</param>
+    /// <returns>是否为 NOT_PAIRED 错误</returns>
     private static bool IsNotPairedError(JsonElement? error)
     {
         if (error is not { } e) return false;
         var raw = e.GetRawText();
-        return raw.Contains("NOT_PAIRED", StringComparison.OrdinalIgnoreCase);
+        return raw.Contains(GatewayConstants.ErrorCodes.NotPaired, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// 从可空的 <see cref="JsonElement"/> 中安全提取指定属性的字符串值。
+    /// </summary>
+    /// <param name="element">可空的 JSON 元素</param>
+    /// <param name="prop">属性名</param>
+    /// <returns>属性值字符串，不存在时返回空字符串</returns>
     private static string GetString(JsonElement? element, string prop)
     {
         if (element is { } el && el.TryGetProperty(prop, out var val))
@@ -537,6 +684,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     // ─── Dispose ────────────────────────────────────────────
 
+    /// <summary>
+    /// 异步释放网关客户端的所有资源：
+    /// 释放设备密钥、取消所有进行中的请求、取消生命周期令牌、关闭 WebSocket 连接。
+    /// 幂等操作，多次调用安全。
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         if (_disposed) return;
@@ -553,20 +705,40 @@ public sealed partial class GatewayClient : IAsyncDisposable
     }
 }
 
+/// <summary>
+/// 设备未配对异常。当 connect 请求返回 NOT_PAIRED 错误时抛出，
+/// 表示当前设备尚未获得网关的配对审批，需要等待管理员批准。
+/// </summary>
 public sealed class NotPairedException : Exception
 {
+    /// <summary>服务端返回的错误详情 JSON</summary>
     public JsonElement? ErrorDetail { get; }
 
+    /// <summary>
+    /// 创建未配对异常实例。
+    /// </summary>
+    /// <param name="message">错误描述信息</param>
+    /// <param name="error">可选的服务端错误 JSON 详情</param>
     public NotPairedException(string message, JsonElement? error = null) : base(message)
     {
         ErrorDetail = error;
     }
 }
 
+/// <summary>
+/// 网关连接状态枚举，描述客户端与网关之间的连接生命周期。
+/// </summary>
 public enum ConnectionState
 {
+    /// <summary>已断开连接（初始状态或连接丢失后的状态）</summary>
     Disconnected,
+
+    /// <summary>正在建立连接和握手</summary>
     Connecting,
+
+    /// <summary>设备未配对，等待管理员审批</summary>
     WaitingForApproval,
+
+    /// <summary>已连接且握手完成，可正常收发消息</summary>
     Connected,
 }

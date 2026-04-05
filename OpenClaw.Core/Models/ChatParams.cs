@@ -3,11 +3,14 @@ using System.Text.Json.Serialization;
 namespace OpenClaw.Core.Models;
 
 /// <summary>
-/// chat.send RPC 方法的请求参数。
+/// <see cref="GatewayConstants.Methods.ChatSend"/> RPC 方法的请求参数。
 /// </summary>
 public sealed record ChatSendParams
 {
-    /// <summary>目标会话的唯一标识键（如 "agent:main:main"）</summary>
+    /// <summary>
+    /// 目标会话的唯一标识键。
+    /// <see cref="GatewayConstants.DefaultSessionKey"/>
+    /// </summary>
     [JsonPropertyName("sessionKey")]
     public required string SessionKey { get; init; }
 

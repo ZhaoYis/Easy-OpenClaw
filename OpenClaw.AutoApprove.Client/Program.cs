@@ -21,8 +21,8 @@ builder.Services.AddOpenClaw(builder.Configuration.GetSection(GatewayOptions.Sec
 
 builder.Services.PostConfigure<GatewayOptions>(opts =>
 {
-    opts.KeyFilePath ??= Path.Combine(stateDir, "device.key");
-    opts.DeviceTokenFilePath ??= Path.Combine(stateDir, "device.token");
+    opts.KeyFilePath ??= Path.Combine(stateDir, GatewayConstants.FileNames.DeviceKey);
+    opts.DeviceTokenFilePath ??= Path.Combine(stateDir, GatewayConstants.FileNames.DeviceToken);
 });
 
 // ─── Register AutoApprove Service ───────────────────────

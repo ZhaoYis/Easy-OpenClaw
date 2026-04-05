@@ -8,7 +8,10 @@ namespace OpenClaw.Core.Models;
 /// </summary>
 public abstract record GatewayFrame
 {
-    /// <summary>帧类型标识（"req" / "res" / "event"）</summary>
+    /// <summary>
+    /// 帧类型标识。
+    /// <see cref="GatewayConstants.FrameTypes"/>
+    /// </summary>
     [JsonPropertyName("type")]
     public abstract string Type { get; }
 }
@@ -18,15 +21,20 @@ public abstract record GatewayFrame
 /// </summary>
 public sealed record GatewayRequest : GatewayFrame
 {
-    /// <summary>帧类型，固定为 "req"</summary>
+    /// <summary>
+    /// 帧类型，固定为 <see cref="GatewayConstants.FrameTypes.Request"/>
+    /// </summary>
     [JsonPropertyName("type")]
-    public override string Type => "req";
+    public override string Type => GatewayConstants.FrameTypes.Request;
 
     /// <summary>请求唯一标识（UUID），用于关联响应</summary>
     [JsonPropertyName("id")]
     public required string Id { get; init; }
 
-    /// <summary>要调用的 RPC 方法名（如 "chat.send"、"health"）</summary>
+    /// <summary>
+    /// 要调用的 RPC 方法名。
+    /// <see cref="GatewayConstants.Methods"/>
+    /// </summary>
     [JsonPropertyName("method")]
     public required string Method { get; init; }
 
@@ -40,9 +48,11 @@ public sealed record GatewayRequest : GatewayFrame
 /// </summary>
 public sealed record GatewayResponse
 {
-    /// <summary>帧类型，固定为 "res"</summary>
+    /// <summary>
+    /// 帧类型，固定为 <see cref="GatewayConstants.FrameTypes.Response"/>
+    /// </summary>
     [JsonPropertyName("type")]
-    public string Type { get; init; } = "res";
+    public string Type { get; init; } = GatewayConstants.FrameTypes.Response;
 
     /// <summary>与请求对应的唯一标识（UUID）</summary>
     [JsonPropertyName("id")]
@@ -66,11 +76,16 @@ public sealed record GatewayResponse
 /// </summary>
 public sealed record GatewayEvent
 {
-    /// <summary>帧类型，固定为 "event"</summary>
+    /// <summary>
+    /// 帧类型，固定为 <see cref="GatewayConstants.FrameTypes.Event"/>
+    /// </summary>
     [JsonPropertyName("type")]
-    public string Type { get; init; } = "event";
+    public string Type { get; init; } = GatewayConstants.FrameTypes.Event;
 
-    /// <summary>事件名称（如 "agent"、"chat"、"presence"、"health"）</summary>
+    /// <summary>
+    /// 事件名称。
+    /// <see cref="GatewayConstants.Events"/>
+    /// </summary>
     [JsonPropertyName("event")]
     public string Event { get; init; } = "";
 
@@ -92,7 +107,10 @@ public sealed record GatewayEvent
 /// </summary>
 public sealed record RawFrame
 {
-    /// <summary>帧类型（"req" / "res" / "event"）</summary>
+    /// <summary>
+    /// 帧类型。
+    /// <see cref="GatewayConstants.FrameTypes"/>
+    /// </summary>
     [JsonPropertyName("type")]
     public string Type { get; init; } = "";
 
@@ -100,7 +118,10 @@ public sealed record RawFrame
     [JsonPropertyName("id")]
     public string? Id { get; init; }
 
-    /// <summary>RPC 方法名（仅 req 帧存在）</summary>
+    /// <summary>
+    /// RPC 方法名（仅 req 帧存在）。
+    /// <see cref="GatewayConstants.Methods"/>
+    /// </summary>
     [JsonPropertyName("method")]
     public string? Method { get; init; }
 
@@ -108,7 +129,10 @@ public sealed record RawFrame
     [JsonPropertyName("ok")]
     public bool? Ok { get; init; }
 
-    /// <summary>事件名称（仅 event 帧存在）</summary>
+    /// <summary>
+    /// 事件名称（仅 event 帧存在）。
+    /// <see cref="GatewayConstants.Events"/>
+    /// </summary>
     [JsonPropertyName("event")]
     public string? Event { get; init; }
 

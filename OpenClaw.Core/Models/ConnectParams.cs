@@ -3,39 +3,60 @@ using System.Text.Json.Serialization;
 namespace OpenClaw.Core.Models;
 
 /// <summary>
-/// connect RPC 方法的请求参数，用于完成网关握手认证。
+/// <see cref="GatewayConstants.Methods.Connect"/> RPC 方法的请求参数，用于完成网关握手认证。
 /// </summary>
 public sealed record ConnectParams
 {
-    /// <summary>客户端支持的最低协议版本</summary>
-    [JsonPropertyName("minProtocol")] public int MinProtocol { get; init; } = 3;
+    /// <summary>
+    /// 客户端支持的最低协议版本。
+    /// <see cref="GatewayConstants.Protocol.Version"/>
+    /// </summary>
+    [JsonPropertyName("minProtocol")] public int MinProtocol { get; init; } = GatewayConstants.Protocol.Version;
 
-    /// <summary>客户端支持的最高协议版本</summary>
-    [JsonPropertyName("maxProtocol")] public int MaxProtocol { get; init; } = 3;
+    /// <summary>
+    /// 客户端支持的最高协议版本。
+    /// <see cref="GatewayConstants.Protocol.Version"/>
+    /// </summary>
+    [JsonPropertyName("maxProtocol")] public int MaxProtocol { get; init; } = GatewayConstants.Protocol.Version;
 
     /// <summary>客户端基本信息（标识、版本、平台、模式）</summary>
     [JsonPropertyName("client")] public required ClientInfo Client { get; init; }
 
-    /// <summary>请求的连接角色（如 "operator"、"node"）</summary>
+    /// <summary>
+    /// 请求的连接角色。
+    /// <see cref="GatewayConstants.Roles"/>
+    /// </summary>
     [JsonPropertyName("role")] public string Role { get; init; } = GatewayConstants.Roles.Operator;
 
-    /// <summary>请求的权限作用域列表</summary>
+    /// <summary>
+    /// 请求的权限作用域列表。
+    /// <see cref="GatewayConstants.Scopes"/>
+    /// </summary>
     [JsonPropertyName("scopes")] public string[] Scopes { get; init; } = [GatewayConstants.Scopes.Admin, GatewayConstants.Scopes.Approvals, GatewayConstants.Scopes.Pairing];
 
     /// <summary>设备身份信息（公钥、签名等 Ed25519 认证数据）</summary>
     [JsonPropertyName("device")] public required DeviceInfo Device { get; init; }
 
-    /// <summary>客户端声明的能力列表（如 "tool-events"）</summary>
-    [JsonPropertyName("caps")] public string[] Caps { get; init; } = ["tool-events"];
+    /// <summary>
+    /// 客户端声明的能力列表。
+    /// <see cref="GatewayConstants.Protocol.CapToolEvents"/>
+    /// </summary>
+    [JsonPropertyName("caps")] public string[] Caps { get; init; } = [GatewayConstants.Protocol.CapToolEvents];
 
     /// <summary>认证凭据（Gateway Token 及可选的 DeviceToken）</summary>
     [JsonPropertyName("auth")] public required AuthInfo Auth { get; init; }
 
-    /// <summary>客户端 User-Agent 字符串</summary>
+    /// <summary>
+    /// 客户端 User-Agent 字符串。
+    /// <see cref="GatewayConstants.Transport.UserAgentTemplate"/>
+    /// </summary>
     [JsonPropertyName("userAgent")] public string? UserAgent { get; init; }
 
-    /// <summary>客户端语言/区域设置</summary>
-    [JsonPropertyName("locale")] public string Locale { get; init; } = "zh";
+    /// <summary>
+    /// 客户端语言/区域设置。
+    /// <see cref="GatewayConstants.Defaults.Locale"/>
+    /// </summary>
+    [JsonPropertyName("locale")] public string Locale { get; init; } = GatewayConstants.Defaults.Locale;
 }
 
 /// <summary>
@@ -43,16 +64,28 @@ public sealed record ConnectParams
 /// </summary>
 public sealed record ClientInfo
 {
-    /// <summary>客户端标识符（如 "cli"、"webchat-ui"）</summary>
+    /// <summary>
+    /// 客户端标识符。
+    /// <see cref="GatewayConstants.ClientIds"/>
+    /// </summary>
     [JsonPropertyName("id")] public string Id { get; init; } = GatewayConstants.ClientIds.Cli;
 
-    /// <summary>客户端版本号</summary>
+    /// <summary>
+    /// 客户端版本号。
+    /// <see cref="GatewayConstants.DefaultClientVersion"/>
+    /// </summary>
     [JsonPropertyName("version")] public string Version { get; init; } = GatewayConstants.DefaultClientVersion;
 
-    /// <summary>运行平台标识（如 "MacIntel"、"Win32"、"dotnet"）</summary>
-    [JsonPropertyName("platform")] public string Platform { get; init; } = "dotnet";
+    /// <summary>
+    /// 运行平台标识。
+    /// <see cref="GatewayConstants.Platforms"/>
+    /// </summary>
+    [JsonPropertyName("platform")] public string Platform { get; init; } = GatewayConstants.Platforms.DotNet;
 
-    /// <summary>客户端运行模式（如 "cli"、"ui"、"backend"）</summary>
+    /// <summary>
+    /// 客户端运行模式。
+    /// <see cref="GatewayConstants.ClientModes"/>
+    /// </summary>
     [JsonPropertyName("mode")] public string Mode { get; init; } = GatewayConstants.ClientModes.Cli;
 
     /// <summary>本次运行的实例唯一 ID（每次启动自动生成）</summary>
@@ -88,6 +121,8 @@ public sealed record DeviceInfo
     /// <summary>签名生成时间戳（Unix 毫秒），用于防重放</summary>
     [JsonPropertyName("signedAt")] public required long SignedAt { get; init; }
 
-    /// <summary>服务端在 connect.challenge 中下发的随机数，参与签名计算</summary>
+    /// <summary>
+    /// 服务端在 <see cref="GatewayConstants.Events.ConnectChallenge"/> 中下发的随机数，参与签名计算
+    /// </summary>
     [JsonPropertyName("nonce")] public required string Nonce { get; init; }
 }
