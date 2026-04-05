@@ -3,7 +3,7 @@ namespace OpenClaw.Core.Models;
 /// <summary>
 /// 网关协议中使用的常量定义。
 /// </summary>
-public static class OpenClawGatewayConstants
+public static class GatewayConstants
 {
     /// <summary>默认客户端版本号</summary>
     public const string DefaultClientVersion = "2026.3.13";

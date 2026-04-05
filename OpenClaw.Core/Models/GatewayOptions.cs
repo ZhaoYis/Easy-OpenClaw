@@ -4,7 +4,7 @@ namespace OpenClaw.Core.Models;
 /// GatewayClient 的连接与行为配置选项。
 /// 遵循标准 Options 模式，通过 <c>IOptions&lt;GatewayOptions&gt;</c> 注入。
 /// </summary>
-public sealed class OpenClawGatewayOptions
+public sealed class GatewayOptions
 {
     /// <summary>配置节名称，用于从 IConfiguration 中绑定</summary>
     public const string SectionName = "OpenClaw";

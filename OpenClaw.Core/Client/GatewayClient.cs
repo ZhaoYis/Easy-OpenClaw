@@ -13,9 +13,9 @@ namespace OpenClaw.Core.Client;
 /// event routing, handshake (with Ed25519 device auth), reconnection, and chat helpers.
 /// Singleton 生命周期：维护 WebSocket 连接状态，整个应用中只需一个实例。
 /// </summary>
-public sealed partial class OpenClawGatewayClient : IAsyncDisposable
+public sealed partial class GatewayClient : IAsyncDisposable
 {
-    private readonly OpenClawGatewayOptions _options;
+    private readonly GatewayOptions _options;
     private readonly RequestManager _requests;
     private readonly EventRouter _events;
     private readonly DeviceIdentity _device;
@@ -47,8 +47,8 @@ public sealed partial class OpenClawGatewayClient : IAsyncDisposable
     /// </summary>
     public IReadOnlyList<string> AvailableEvents => _helloOk?.Features?.Events ?? [];
 
-    public OpenClawGatewayClient(
-        IOptions<OpenClawGatewayOptions> options,
+    public GatewayClient(
+        IOptions<GatewayOptions> options,
         RequestManager requests,
         EventRouter events,
         DeviceIdentity device)

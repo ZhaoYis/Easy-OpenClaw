@@ -1,19 +1,21 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Options;
 using OpenClaw.Core.Models;
 
 namespace OpenClaw.Core.Client;
 
 /// <summary>
 /// Tracks in-flight requests and correlates them with responses by id.
+/// Singleton 生命周期：持有所有进行中请求的状态，贯穿整个应用生命周期。
 /// </summary>
 public sealed class RequestManager
 {
     private readonly ConcurrentDictionary<string, TaskCompletionSource<GatewayResponse>> _pending = new();
     private readonly TimeSpan _defaultTimeout;
 
-    public RequestManager(TimeSpan? defaultTimeout = null)
+    public RequestManager(IOptions<GatewayOptions> options)
     {
-        _defaultTimeout = defaultTimeout ?? TimeSpan.FromSeconds(30);
+        _defaultTimeout = options.Value.RequestTimeout;
     }
 
     public string NextId() => Guid.NewGuid().ToString();

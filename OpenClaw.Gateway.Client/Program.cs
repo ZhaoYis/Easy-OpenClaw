@@ -1,30 +1,37 @@
 ﻿using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OpenClaw.Core.Client;
-using OpenClaw.Core.Helpers;
+using OpenClaw.Core.Extensions;
 using OpenClaw.Core.Logging;
 using OpenClaw.Core.Models;
 
-// ─── Configuration ──────────────────────────────────────
+PrintBanner();
 
-var config = AppConfigHelper.LoadFromBaseDirectory<AppConfig>();
+// ─── Build Host (DI + Configuration) ────────────────────
 
-var gatewayUrl = Environment.GetEnvironmentVariable("OPENCLAW_GATEWAY_URL") ?? config.GatewayUrl;
-var gatewayToken = Environment.GetEnvironmentVariable("OPENCLAW_GATEWAY_TOKEN") ?? config.GatewayToken;
+var builder = Host.CreateApplicationBuilder(args);
 
 var stateDir = Environment.GetEnvironmentVariable("OPENCLAW_STATE_DIR")
                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".openclaw-client");
 
-var options = new GatewayOptions
+builder.Services.AddOpenClaw(builder.Configuration.GetSection(GatewayOptions.SectionName));
+
+builder.Services.PostConfigure<GatewayOptions>(opts =>
 {
-    Url = gatewayUrl,
-    Token = gatewayToken,
-    KeyFilePath = Path.Combine(stateDir, "device.key"),
-    DeviceTokenFilePath = Path.Combine(stateDir, "device.token"),
-};
+    opts.KeyFilePath ??= Path.Combine(stateDir, "device.key");
+    opts.DeviceTokenFilePath ??= Path.Combine(stateDir, "device.token");
+});
 
-PrintBanner();
+builder.Services.UseOpenClawEventSubscriber();
 
-await using var client = new GatewayClient(options);
+using var host = builder.Build();
+
+// ─── Resolve Services from DI ───────────────────────────
+
+var client = host.Services.GetRequiredService<GatewayClient>();
+var eventSubscriber = host.Services.GetRequiredService<GatewayEventSubscriber>();
+
 using var cts = new CancellationTokenSource();
 
 Console.CancelKeyPress += (_, e) =>
@@ -40,8 +47,6 @@ var sw = new Stopwatch();
 var turnComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
 // ─── Register ALL Event Handlers via Subscriber ─────────
-
-var eventSubscriber = new GatewayEventSubscriber(client);
 
 eventSubscriber.FirstDeltaReceived += () => { Log.ReplaceThinkingWithContent(); };
 
@@ -222,10 +227,4 @@ static void PrintBanner()
     Console.WriteLine("  ─────────────────────────────────────────────────");
     Console.ResetColor();
     Console.WriteLine();
-}
-
-sealed record AppConfig
-{
-    public string GatewayUrl { get; init; } = GatewayConstants.DefaultGatewayUrl;
-    public string GatewayToken { get; init; } = "YOUR_GATEWAY_TOKEN";
 }
