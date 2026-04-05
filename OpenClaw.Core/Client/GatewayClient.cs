@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
 using OpenClaw.Core.Helpers;
 using OpenClaw.Core.Logging;
 using OpenClaw.Core.Models;
@@ -11,10 +11,11 @@ namespace OpenClaw.Core.Client;
 /// <summary>
 /// High-level client that wraps WebSocket transport, request/response correlation,
 /// event routing, handshake (with Ed25519 device auth), reconnection, and chat helpers.
+/// Singleton 生命周期：维护 WebSocket 连接状态，整个应用中只需一个实例。
 /// </summary>
-public sealed partial class GatewayClient : IAsyncDisposable
+public sealed partial class OpenClawGatewayClient : IAsyncDisposable
 {
-    private readonly GatewayOptions _options;
+    private readonly OpenClawGatewayOptions _options;
     private readonly RequestManager _requests;
     private readonly EventRouter _events;
     private readonly DeviceIdentity _device;
@@ -46,12 +47,16 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// </summary>
     public IReadOnlyList<string> AvailableEvents => _helloOk?.Features?.Events ?? [];
 
-    public GatewayClient(GatewayOptions options)
+    public OpenClawGatewayClient(
+        IOptions<OpenClawGatewayOptions> options,
+        RequestManager requests,
+        EventRouter events,
+        DeviceIdentity device)
     {
-        _options = options;
-        _requests = new RequestManager(options.RequestTimeout);
-        _events = new EventRouter();
-        _device = DeviceIdentity.LoadOrCreate(options.KeyFilePath);
+        _options = options.Value;
+        _requests = requests;
+        _events = events;
+        _device = device;
 
         _deviceToken = LoadDeviceToken();
 
@@ -539,7 +544,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         _device.Dispose();
         _requests.CancelAll();
-        await _lifetimeCts?.CancelAsync();
+        if (_lifetimeCts is not null)
+            await _lifetimeCts.CancelAsync();
         _lifetimeCts?.Dispose();
 
         if (_ws is not null)

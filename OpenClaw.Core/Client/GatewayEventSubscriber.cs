@@ -9,11 +9,11 @@ namespace OpenClaw.Core.Client;
 /// 将所有服务端推送事件的注册逻辑集中管理，每个事件提取关键字段并打印到控制台。
 /// 通过 C# event 回调通知调用方，实现事件处理逻辑与 UI/业务逻辑的解耦。
 /// </summary>
-public sealed class GatewayEventSubscriber
+public sealed class OpenClawGatewayEventSubscriber
 {
     private readonly GatewayClient _client;
 
-    public GatewayEventSubscriber(GatewayClient client)
+    public OpenClawGatewayEventSubscriber(GatewayClient client)
     {
         _client = client;
     }
