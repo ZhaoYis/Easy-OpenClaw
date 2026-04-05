@@ -1,6 +1,6 @@
 # Easy-OpenClaw
 
-基于 .NET 10 的 [OpenClaw](https://openclaw.com) Gateway WebSocket 客户端 SDK，提供完整的网关连接、Ed25519 设备认证、RPC 调用和实时事件订阅能力。
+基于 .NET 10 的 [OpenClaw](https://openclaw.ai) Gateway WebSocket 客户端 SDK，提供完整的网关连接、Ed25519 设备认证、RPC 调用和实时事件订阅能力。
 
 ## 项目结构
 
