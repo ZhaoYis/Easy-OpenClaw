@@ -574,8 +574,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
         }
 
         var primary = tokens[0];
-        _deviceToken = primary.Token;
-        PersistDeviceToken(primary.Token);
+        _deviceToken = primary.DeviceToken;
+        PersistDeviceToken(primary.DeviceToken);
         if (primary.Scopes is { Length: > 0 } scopes)
         {
             _cachedScopes = scopes;
@@ -778,18 +778,25 @@ public sealed partial class GatewayClient : IAsyncDisposable
     {
         var effectiveScopes = ResolveEffectiveScopes();
 
+        var platform = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? GatewayConstants.Platforms.MacIntel
+            : RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? GatewayConstants.Platforms.Win32
+            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? GatewayConstants.Platforms.Linux
+            : GatewayConstants.Platforms.Unknown;
+
+        var deviceFamily = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "desktop"
+            : RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "desktop"
+            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "desktop"
+            : "unknown";
+
         var sig = _device.Sign(
             clientId: _options.ClientId,
             clientMode: _options.ClientMode,
             role: _options.Role,
             scopes: effectiveScopes,
             token: _options.Token,
-            nonce: nonce);
-
-        var platform = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? GatewayConstants.Platforms.MacIntel
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? GatewayConstants.Platforms.Win32
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? GatewayConstants.Platforms.Linux
-            : GatewayConstants.Platforms.Unknown;
+            nonce: nonce,
+            platform: platform,
+            deviceFamily: deviceFamily);
 
         var auth = BuildAuthInfo(deviceTokenOnly);
 

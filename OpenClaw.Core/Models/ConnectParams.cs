@@ -43,6 +43,18 @@ public sealed record ConnectParams
     /// </summary>
     [JsonPropertyName("caps")] public string[] Caps { get; init; } = [GatewayConstants.Protocol.CapToolEvents];
 
+    /// <summary>
+    /// 节点角色的命令允许列表（command allowlist for invoke）。
+    /// 仅在 <see cref="Role"/> 为 <see cref="GatewayConstants.Roles.Node"/> 时由网关校验。
+    /// </summary>
+    [JsonPropertyName("commands")] public string[] Commands { get; init; } = [];
+
+    /// <summary>
+    /// 节点角色的粒度权限开关（如 <c>"camera.capture": true</c>, <c>"screen.record": false</c>）。
+    /// 仅在 <see cref="Role"/> 为 <see cref="GatewayConstants.Roles.Node"/> 时由网关校验。
+    /// </summary>
+    [JsonPropertyName("permissions")] public Dictionary<string, bool>? Permissions { get; init; }
+
     /// <summary>认证凭据（Gateway Token 及可选的 DeviceToken）</summary>
     [JsonPropertyName("auth")] public required AuthInfo Auth { get; init; }
 

@@ -81,23 +81,37 @@ public sealed class DeviceIdentity : IDisposable
     }
 
     /// <summary>
-    /// Build the v2 auth payload and produce an Ed25519 signature.
-    /// Payload: v2|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce
+    /// Build the v3 auth payload and produce an Ed25519 signature.
+    /// v3 payload: v3|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce|platform|deviceFamily
+    /// v2 payload (legacy): v2|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce
     /// </summary>
+    /// <param name="clientId">客户端标识符</param>
+    /// <param name="clientMode">客户端运行模式</param>
+    /// <param name="role">连接角色</param>
+    /// <param name="scopes">请求的权限作用域</param>
+    /// <param name="token">认证令牌</param>
+    /// <param name="nonce">服务端下发的随机 nonce</param>
+    /// <param name="platform">运行平台标识（v3 新增绑定字段）</param>
+    /// <param name="deviceFamily">设备系列标识（v3 新增绑定字段，如 "desktop"、"mobile"）</param>
     public DeviceSignature Sign(
         string clientId,
         string clientMode,
         string role,
         string[] scopes,
         string token,
-        string nonce)
+        string nonce,
+        string platform = "",
+        string deviceFamily = "")
     {
         var signedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var scopesJoined = string.Join(",", scopes);
 
-        var payload = $"{GatewayConstants.Signature.VersionPrefix}|{DeviceId}|{clientId}|{clientMode}|{role}|{scopesJoined}|{signedAt}|{token}|{nonce}";
+        var versionPrefix = GatewayConstants.Signature.VersionPrefix;
+        var payload = versionPrefix == GatewayConstants.Signature.V3Prefix
+            ? $"{versionPrefix}|{DeviceId}|{clientId}|{clientMode}|{role}|{scopesJoined}|{signedAt}|{token}|{nonce}|{platform}|{deviceFamily}"
+            : $"{versionPrefix}|{DeviceId}|{clientId}|{clientMode}|{role}|{scopesJoined}|{signedAt}|{token}|{nonce}";
 
-        Log.Debug($"签名 payload: {payload[..Math.Min(payload.Length, 80)]}...");
+        Log.Debug($"签名 payload ({versionPrefix}): {payload[..Math.Min(payload.Length, 100)]}...");
 
         var payloadBytes = Encoding.UTF8.GetBytes(payload);
         var sig = Algorithm.Sign(_signingKey, payloadBytes);

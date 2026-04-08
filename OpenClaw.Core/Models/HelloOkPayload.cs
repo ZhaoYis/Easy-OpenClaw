@@ -94,7 +94,7 @@ public sealed record HelloAuthInfo
 public sealed record DeviceTokenEntry
 {
     /// <summary>设备令牌值</summary>
-    [JsonPropertyName("token")] public string Token { get; init; } = "";
+    [JsonPropertyName("deviceToken")] public string DeviceToken { get; init; } = "";
 
     /// <summary>令牌关联的角色</summary>
     [JsonPropertyName("role")] public string? Role { get; init; }

@@ -350,6 +350,23 @@ public sealed partial class GatewayClient
         => InvokeAsync(GatewayConstants.Methods.ExecApprovalRequest, request, ct);
 
     /// <summary>
+    /// 查询单个执行审批请求的详情（含当前状态、请求方信息、审批决定等）。
+    /// </summary>
+    /// <param name="approvalId">审批请求 ID</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>网关响应，<see cref="GatewayResponse.Payload"/> 包含审批请求详情</returns>
+    public Task<GatewayResponse> ExecApprovalGetAsync(string approvalId, CancellationToken ct = default)
+        => InvokeAsync(GatewayConstants.Methods.ExecApprovalGet, new { approvalId }, ct);
+
+    /// <summary>
+    /// 列出所有待处理和已完成的执行审批请求（含 pending 审批查询/replay）。
+    /// </summary>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>网关响应，<see cref="GatewayResponse.Payload"/> 包含审批请求列表</returns>
+    public Task<GatewayResponse> ExecApprovalListAsync(CancellationToken ct = default)
+        => InvokeAsync(GatewayConstants.Methods.ExecApprovalList, ct: ct);
+
+    /// <summary>
     /// 等待指定审批请求的决定结果。此调用会挂起直到审批被批准或拒绝。
     /// </summary>
     /// <param name="approvalId">审批请求 ID</param>
@@ -381,6 +398,14 @@ public sealed partial class GatewayClient
     /// <returns>网关响应，<see cref="GatewayResponse.Payload"/> 包含 approvalId</returns>
     public Task<GatewayResponse> PluginApprovalRequestAsync(object request, CancellationToken ct = default)
         => InvokeAsync(GatewayConstants.Methods.PluginApprovalRequest, request, ct);
+
+    /// <summary>
+    /// 列出所有待处理和已完成的插件审批请求。
+    /// </summary>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>网关响应，<see cref="GatewayResponse.Payload"/> 包含插件审批请求列表</returns>
+    public Task<GatewayResponse> PluginApprovalListAsync(CancellationToken ct = default)
+        => InvokeAsync(GatewayConstants.Methods.PluginApprovalList, ct: ct);
 
     /// <summary>
     /// 等待指定插件审批请求的决定结果。此调用会挂起直到审批被批准/拒绝或超时。

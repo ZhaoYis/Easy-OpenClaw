@@ -7,7 +7,7 @@ namespace OpenClaw.Core.Models;
 public static class GatewayConstants
 {
     /// <summary>默认客户端版本号，跟随 Gateway 协议的发布周期更新</summary>
-    public const string DefaultClientVersion = "2026.3.13";
+    public const string DefaultClientVersion = "2026.4.8";
 
     /// <summary>默认会话键，格式为 agent:{agentId}:{session}，指向主 Agent 的主会话</summary>
     public const string DefaultSessionKey = "agent:main:main";
@@ -73,6 +73,9 @@ public static class GatewayConstants
 
         /// <summary>图形界面模式</summary>
         public const string Ui = "ui";
+
+        /// <summary>控制平面操作员模式（CLI/UI/自动化脚本），对应协议中 operator 角色的 mode 值</summary>
+        public const string Operator = "operator";
 
         /// <summary>后端服务模式</summary>
         public const string Backend = "backend";
@@ -257,6 +260,12 @@ public static class GatewayConstants
         /// <summary>发起执行审批请求</summary>
         public const string ExecApprovalRequest = "exec.approval.request";
 
+        /// <summary>查询单个执行审批请求的详情</summary>
+        public const string ExecApprovalGet = "exec.approval.get";
+
+        /// <summary>列出所有待处理和已完成的执行审批请求</summary>
+        public const string ExecApprovalList = "exec.approval.list";
+
         /// <summary>等待执行审批决定</summary>
         public const string ExecApprovalWaitDecision = "exec.approval.waitDecision";
 
@@ -267,6 +276,9 @@ public static class GatewayConstants
 
         /// <summary>发起插件自定义审批请求，由插件在需要用户确认时调用</summary>
         public const string PluginApprovalRequest = "plugin.approval.request";
+
+        /// <summary>列出所有待处理和已完成的插件审批请求</summary>
+        public const string PluginApprovalList = "plugin.approval.list";
 
         /// <summary>等待插件审批决定，挂起直到审批被批准/拒绝或超时返回 null</summary>
         public const string PluginApprovalWaitDecision = "plugin.approval.waitDecision";
@@ -870,8 +882,21 @@ public static class GatewayConstants
     /// </summary>
     public static class Signature
     {
-        /// <summary>签名 Payload 版本前缀，当前为 v2 格式</summary>
-        public const string VersionPrefix = "v2";
+        /// <summary>签名 Payload 版本前缀（v2 格式，当前默认且被广泛支持）</summary>
+        public const string V2Prefix = "v2";
+
+        /// <summary>
+        /// 签名 Payload 版本前缀（v3 格式）。
+        /// v3 在 v2 基础上额外绑定 <c>platform</c> 和 <c>deviceFamily</c> 字段，安全性更高。
+        /// 协议文档标注为 preferred，但需要网关服务端同步支持后方可切换。
+        /// </summary>
+        public const string V3Prefix = "v3";
+
+        /// <summary>
+        /// 当前默认使用的签名版本前缀。
+        /// 默认 v2 保证与所有网关版本兼容；待服务端全面支持 v3 后可切换为 <see cref="V3Prefix"/>。
+        /// </summary>
+        public const string VersionPrefix = V2Prefix;
     }
 
     /// <summary>
