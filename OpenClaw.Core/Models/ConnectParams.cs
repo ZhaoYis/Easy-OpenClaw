@@ -100,6 +100,9 @@ public sealed record AuthInfo
     /// <summary>Gateway 访问令牌（在网关配置中设定）</summary>
     [JsonPropertyName("token")] public string? Token { get; init; }
 
+    /// <summary>Gateway 访问密码（与 Token 二选一，取决于网关 auth mode 配置）</summary>
+    [JsonPropertyName("password")] public string? Password { get; init; }
+
     /// <summary>设备令牌（首次连接后由网关签发，后续重连时携带可跳过配对审批）</summary>
     [JsonPropertyName("deviceToken")] public string? DeviceToken { get; init; }
 }
@@ -125,4 +128,35 @@ public sealed record DeviceInfo
     /// 服务端在 <see cref="GatewayConstants.Events.ConnectChallenge"/> 中下发的随机数，参与签名计算
     /// </summary>
     [JsonPropertyName("nonce")] public required string Nonce { get; init; }
+}
+
+/// <summary>
+/// 认证失败时 <c>error.details</c> 中的结构化信息，包含错误码和恢复提示。
+/// 同时承载 <c>DEVICE_AUTH_*</c> 迁移诊断码的 <see cref="Reason"/> 字段。
+/// </summary>
+public sealed record AuthErrorDetails
+{
+    /// <summary>认证错误码（如 <see cref="GatewayConstants.ErrorCodes.AuthTokenMismatch"/> 或 <c>DEVICE_AUTH_*</c>）</summary>
+    [JsonPropertyName("code")] public string? Code { get; init; }
+
+    /// <summary>
+    /// 稳定的诊断原因标识符，与 <c>DEVICE_AUTH_*</c> 码配对使用。
+    /// <see cref="GatewayConstants.DeviceAuthReasons"/>
+    /// </summary>
+    [JsonPropertyName("reason")] public string? Reason { get; init; }
+
+    /// <summary>是否可使用缓存的 per-device token 重试</summary>
+    [JsonPropertyName("canRetryWithDeviceToken")] public bool? CanRetryWithDeviceToken { get; init; }
+
+    /// <summary>
+    /// 建议的下一步操作。
+    /// <see cref="GatewayConstants.AuthRecoveryHints"/>
+    /// </summary>
+    [JsonPropertyName("recommendedNextStep")] public string? RecommendedNextStep { get; init; }
+
+    /// <summary>
+    /// 判断此错误是否属于设备认证迁移诊断类（<c>DEVICE_AUTH_*</c> 前缀）。
+    /// </summary>
+    public bool IsDeviceAuthError =>
+        Code is not null && Code.StartsWith(GatewayConstants.ErrorCodes.DeviceAuthPrefix, StringComparison.Ordinal);
 }

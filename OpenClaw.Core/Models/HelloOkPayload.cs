@@ -72,6 +72,12 @@ public sealed record HelloAuthInfo
     /// <summary>网关签发的设备令牌，后续重连时可用于免挑战认证</summary>
     [JsonPropertyName("deviceToken")] public string? DeviceToken { get; init; }
 
+    /// <summary>
+    /// Bootstrap handoff tokens（复数）。仅当本次连接使用 bootstrap auth 且在可信传输
+    /// （如 wss:// 或 loopback/local pairing）上时才应持久化这些令牌。
+    /// </summary>
+    [JsonPropertyName("deviceTokens")] public DeviceTokenEntry[]? DeviceTokens { get; init; }
+
     /// <summary>当前连接被授予的角色（如 "operator"、"node"）</summary>
     [JsonPropertyName("role")] public string? Role { get; init; }
 
@@ -79,6 +85,24 @@ public sealed record HelloAuthInfo
     [JsonPropertyName("scopes")] public string[]? Scopes { get; init; }
 
     /// <summary>DeviceToken 签发时间（Unix 毫秒）</summary>
+    [JsonPropertyName("issuedAtMs")] public long? IssuedAtMs { get; init; }
+}
+
+/// <summary>
+/// hello-ok.auth.deviceTokens 中的单个 bootstrap handoff token 条目。
+/// </summary>
+public sealed record DeviceTokenEntry
+{
+    /// <summary>设备令牌值</summary>
+    [JsonPropertyName("token")] public string Token { get; init; } = "";
+
+    /// <summary>令牌关联的角色</summary>
+    [JsonPropertyName("role")] public string? Role { get; init; }
+
+    /// <summary>令牌关联的权限作用域</summary>
+    [JsonPropertyName("scopes")] public string[]? Scopes { get; init; }
+
+    /// <summary>令牌签发时间（Unix 毫秒）</summary>
     [JsonPropertyName("issuedAtMs")] public long? IssuedAtMs { get; init; }
 }
 

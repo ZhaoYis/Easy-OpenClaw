@@ -26,6 +26,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
     private volatile ConnectionState _state = ConnectionState.Disconnected;
 
     private string? _deviceToken;
+    private string[]? _cachedScopes;
     private HelloOkPayload? _helloOk;
 
     public EventRouter Events => _events;
@@ -94,10 +95,13 @@ public sealed partial class GatewayClient : IAsyncDisposable
         _device = device;
 
         _deviceToken = LoadDeviceToken();
+        _cachedScopes = LoadDeviceScopes();
 
         Log.Info($"Device ID: {_device.DeviceId[..16]}...");
         if (_deviceToken is not null)
             Log.Debug("已加载缓存的 deviceToken");
+        if (_cachedScopes is not null)
+            Log.Debug($"已加载缓存的 scopes: [{string.Join(", ", _cachedScopes)}]");
     }
 
     // ─── Public API ────────────────────────────────────────
@@ -156,7 +160,35 @@ public sealed partial class GatewayClient : IAsyncDisposable
                 throw new NotPairedException(errText, connectResp.Error);
             }
 
-            throw new InvalidOperationException($"connect 失败: {errText}");
+            var authErr = TryParseAuthError(connectResp.Error);
+
+            if (authErr is { IsDeviceAuthError: true })
+            {
+                Log.Error($"设备认证失败: {authErr.Code} (reason={authErr.Reason})");
+                throw new DeviceAuthException(errText, authErr, connectResp.Error);
+            }
+
+            if (authErr is { Code: GatewayConstants.ErrorCodes.AuthTokenMismatch }
+                && authErr.CanRetryWithDeviceToken == true
+                && _deviceToken is not null)
+            {
+                Log.Warn("AUTH_TOKEN_MISMATCH — 尝试使用缓存的 deviceToken 重试一次...");
+                connectResp = await RetryConnectWithDeviceTokenOnlyAsync(nonce, _lifetimeCts.Token);
+                if (!connectResp.Ok)
+                {
+                    var retryErr = connectResp.Error?.GetRawText() ?? "unknown";
+                    Log.Error("deviceToken 重试仍失败，停止自动重连");
+                    throw new AuthTokenMismatchException(retryErr, connectResp.Error);
+                }
+            }
+            else if (authErr?.Code == GatewayConstants.ErrorCodes.AuthTokenMismatch)
+            {
+                throw new AuthTokenMismatchException(errText, connectResp.Error);
+            }
+            else
+            {
+                throw new InvalidOperationException($"connect 失败: {errText}");
+            }
         }
 
         ProcessHelloOk(connectResp);
@@ -360,6 +392,15 @@ public sealed partial class GatewayClient : IAsyncDisposable
                 PersistDeviceToken(dt);
                 Log.Success("  DeviceToken 已保存");
             }
+
+            if (auth.Scopes is { Length: > 0 } scopes)
+            {
+                _cachedScopes = scopes;
+                PersistDeviceScopes(scopes);
+                Log.Debug("  Scopes 已缓存");
+            }
+
+            PersistBootstrapHandoffTokens(auth.DeviceTokens);
         }
 
         if (_helloOk.Snapshot is { } snap)
@@ -467,6 +508,100 @@ public sealed partial class GatewayClient : IAsyncDisposable
         }
     }
 
+    // ─── DeviceScopes Persistence ─────────────────────────
+
+    /// <summary>
+    /// 从磁盘加载缓存的 scope 集合（JSON 字符串数组）。
+    /// 重连时复用已授予的 approved scope set 以避免权限收窄。
+    /// </summary>
+    private string[]? LoadDeviceScopes()
+    {
+        var path = _options.DeviceScopesFilePath;
+        if (path is null || !File.Exists(path)) return null;
+
+        try
+        {
+            var json = File.ReadAllText(path).Trim();
+            if (string.IsNullOrEmpty(json)) return null;
+            return JsonSerializer.Deserialize<string[]>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 将服务端授予的 scope 集合持久化到磁盘，供后续重连时复用。
+    /// </summary>
+    private void PersistDeviceScopes(string[] scopes)
+    {
+        var path = _options.DeviceScopesFilePath;
+        if (path is null) return;
+
+        try
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+            File.WriteAllText(path, JsonSerializer.Serialize(scopes));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"保存 scopes 失败: {ex.Message}");
+        }
+    }
+
+    // ─── Bootstrap Handoff Tokens ─────────────────────────
+
+    /// <summary>
+    /// 处理 hello-ok.auth.deviceTokens（bootstrap handoff tokens）。
+    /// 仅在本次连接使用了 bootstrap auth 且传输层可信（wss:// 或 loopback）时才持久化。
+    /// </summary>
+    private void PersistBootstrapHandoffTokens(DeviceTokenEntry[]? tokens)
+    {
+        if (tokens is not { Length: > 0 }) return;
+
+        if (!IsTransportTrusted())
+        {
+            Log.Debug($"  收到 {tokens.Length} 个 bootstrap handoff token，但传输层不可信，跳过持久化");
+            return;
+        }
+
+        foreach (var entry in tokens)
+        {
+            Log.Debug($"  Bootstrap handoff token: role={entry.Role}, scopes=[{string.Join(", ", entry.Scopes ?? [])}]");
+        }
+
+        var primary = tokens[0];
+        _deviceToken = primary.Token;
+        PersistDeviceToken(primary.Token);
+        if (primary.Scopes is { Length: > 0 } scopes)
+        {
+            _cachedScopes = scopes;
+            PersistDeviceScopes(scopes);
+        }
+
+        Log.Success($"  已持久化 bootstrap handoff token（共 {tokens.Length} 个）");
+    }
+
+    /// <summary>
+    /// 判断当前 WebSocket 传输是否可信（wss:// 或 loopback 地址）。
+    /// </summary>
+    private bool IsTransportTrusted()
+    {
+        var url = _options.Url;
+        if (url.StartsWith("wss://", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            var host = uri.Host;
+            return host is "localhost" or "127.0.0.1" or "::1"
+                   || host.StartsWith("[::1]", StringComparison.Ordinal);
+        }
+        return false;
+    }
+
     // ─── Transport ─────────────────────────────────────────
 
     /// <summary>
@@ -479,7 +614,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
         if (_ws is not null)
             await _ws.DisposeAsync();
 
-        _ws = new WebSocketClient(new Uri(_options.Url));
+        _ws = new WebSocketClient(new Uri(_options.Url), _options.TlsFingerprint);
         _ws.OnMessage += OnRawMessage;
         _ws.OnClosed += OnTransportClosed;
         _ws.OnError += OnTransportError;
@@ -631,22 +766,23 @@ public sealed partial class GatewayClient : IAsyncDisposable
     // ─── Helpers ────────────────────────────────────────────
 
     /// <summary>
-    /// 构建 connect 请求的参数对象。包含：
-    /// - 客户端身份信息（ID、版本、平台、模式）
-    /// - 角色和权限范围
-    /// - 认证令牌（包含缓存的 DeviceToken，若存在）
-    /// - User-Agent 字符串
-    /// - Ed25519 设备签名（对 nonce 签名以证明设备身份）
+    /// 构建 connect 请求的参数对象。
+    /// Auth 优先级：explicit shared token/password → explicit deviceToken → stored per-device token → bootstrap token。
+    /// Scope 策略：显式 deviceToken 或 scopes 配置时使用调用方请求的 scope 集合；
+    /// 仅在复用 stored per-device token 时，合并缓存的 approved scope set 以保留已授予的权限。
     /// </summary>
     /// <param name="nonce">服务端下发的随机 nonce</param>
+    /// <param name="deviceTokenOnly">为 true 时仅发送 deviceToken（AUTH_TOKEN_MISMATCH 重试场景）</param>
     /// <returns>完整的 connect 请求参数</returns>
-    private ConnectParams BuildConnectParams(string nonce)
+    private ConnectParams BuildConnectParams(string nonce, bool deviceTokenOnly = false)
     {
+        var effectiveScopes = ResolveEffectiveScopes();
+
         var sig = _device.Sign(
             clientId: _options.ClientId,
             clientMode: _options.ClientMode,
             role: _options.Role,
-            scopes: _options.Scopes,
+            scopes: effectiveScopes,
             token: _options.Token,
             nonce: nonce);
 
@@ -655,9 +791,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
             : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? GatewayConstants.Platforms.Linux
             : GatewayConstants.Platforms.Unknown;
 
-        var auth = _deviceToken is not null
-            ? new AuthInfo { Token = _options.Token, DeviceToken = _deviceToken }
-            : new AuthInfo { Token = _options.Token };
+        var auth = BuildAuthInfo(deviceTokenOnly);
 
         return new ConnectParams
         {
@@ -669,7 +803,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
                 Mode = _options.ClientMode,
             },
             Role = _options.Role,
-            Scopes = _options.Scopes,
+            Scopes = effectiveScopes,
             Auth = auth,
             UserAgent = string.Format(GatewayConstants.Transport.UserAgentTemplate, _options.ClientVersion, RuntimeInformation.OSDescription),
             Device = new DeviceInfo
@@ -684,6 +818,63 @@ public sealed partial class GatewayClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// 构建 auth 信息。
+    /// <paramref name="deviceTokenOnly"/> 为 true 时仅发送 deviceToken，不发送 token/password
+    /// （用于 AUTH_TOKEN_MISMATCH bounded retry 场景）。
+    /// </summary>
+    private AuthInfo BuildAuthInfo(bool deviceTokenOnly)
+    {
+        if (deviceTokenOnly && _deviceToken is not null)
+            return new AuthInfo { DeviceToken = _deviceToken };
+
+        return new AuthInfo
+        {
+            Token = !string.IsNullOrEmpty(_options.Token) ? _options.Token : null,
+            Password = !string.IsNullOrEmpty(_options.Password) ? _options.Password : null,
+            DeviceToken = _deviceToken,
+        };
+    }
+
+    /// <summary>
+    /// 根据协议优先级解析有效的 scope 集合：
+    /// - 用户显式配置了 scopes → 使用显式值（调用方权威）
+    /// - 复用 stored per-device token 且有缓存 scopes → 使用缓存值以保留已授予的权限
+    /// - 以上都不满足 → 使用配置默认值
+    /// </summary>
+    private string[] ResolveEffectiveScopes()
+    {
+        if (_cachedScopes is { Length: > 0 } && _deviceToken is not null)
+            return _cachedScopes;
+        return _options.Scopes;
+    }
+
+    /// <summary>
+    /// AUTH_TOKEN_MISMATCH bounded retry：断开当前传输，重新建连并仅用 deviceToken 做一次重试。
+    /// </summary>
+    private async Task<GatewayResponse> RetryConnectWithDeviceTokenOnlyAsync(string previousNonce, CancellationToken ct)
+    {
+        if (_ws is not null) await _ws.DisposeAsync();
+
+        var challengeTcs = new TaskCompletionSource<GatewayEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _events.On(GatewayConstants.Events.ConnectChallenge, evt =>
+        {
+            challengeTcs.TrySetResult(evt);
+            return Task.CompletedTask;
+        });
+
+        await ConnectTransportAsync(ct);
+        var challengeEvt = await challengeTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+        _events.Off(GatewayConstants.Events.ConnectChallenge);
+
+        var nonce = "";
+        if (challengeEvt.Payload.HasValue)
+            nonce = GetString(challengeEvt.Payload.Value, "nonce");
+
+        var connectParams = BuildConnectParams(nonce, deviceTokenOnly: true);
+        return await SendRequestAsync(GatewayConstants.Methods.Connect, connectParams, ct);
+    }
+
+    /// <summary>
     /// 检测 connect 错误响应是否为 NOT_PAIRED 错误（设备未配对）。
     /// 通过在错误 JSON 文本中搜索 NOT_PAIRED 标识符来判断。
     /// </summary>
@@ -694,6 +885,33 @@ public sealed partial class GatewayClient : IAsyncDisposable
         if (error is not { } e) return false;
         var raw = e.GetRawText();
         return raw.Contains(GatewayConstants.ErrorCodes.NotPaired, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 尝试从 connect 错误响应中解析结构化的认证错误详情。
+    /// 查找路径为 <c>error.details</c> 或 <c>error</c> 本身中的 <c>code</c> 字段。
+    /// </summary>
+    private static AuthErrorDetails? TryParseAuthError(JsonElement? error)
+    {
+        if (error is not { } e) return null;
+
+        try
+        {
+            if (e.TryGetProperty("details", out var details))
+                return JsonSerializer.Deserialize<AuthErrorDetails>(details.GetRawText(), JsonDefaults.SerializerOptions);
+
+            if (e.TryGetProperty("code", out _))
+                return JsonSerializer.Deserialize<AuthErrorDetails>(e.GetRawText(), JsonDefaults.SerializerOptions);
+        }
+        catch (JsonException)
+        {
+        }
+
+        var raw = e.GetRawText();
+        if (raw.Contains(GatewayConstants.ErrorCodes.AuthTokenMismatch, StringComparison.OrdinalIgnoreCase))
+            return new AuthErrorDetails { Code = GatewayConstants.ErrorCodes.AuthTokenMismatch };
+
+        return null;
     }
 
     /// <summary>
@@ -762,6 +980,51 @@ public sealed class NotPairedException : Exception
     /// <param name="error">可选的服务端错误 JSON 详情</param>
     public NotPairedException(string message, JsonElement? error = null) : base(message)
     {
+        ErrorDetail = error;
+    }
+}
+
+/// <summary>
+/// 认证令牌不匹配异常。当 connect 请求返回 AUTH_TOKEN_MISMATCH 错误时抛出，
+/// 表示共享密钥/密码与网关当前配置不一致。
+/// 客户端应停止自动重连并引导操作员检查认证配置。
+/// </summary>
+public sealed class AuthTokenMismatchException : Exception
+{
+    /// <summary>服务端返回的错误详情 JSON</summary>
+    public JsonElement? ErrorDetail { get; }
+
+    public AuthTokenMismatchException(string message, JsonElement? error = null) : base(message)
+    {
+        ErrorDetail = error;
+    }
+}
+
+/// <summary>
+/// 设备认证迁移诊断异常。当 connect 请求返回 <c>DEVICE_AUTH_*</c> 错误码时抛出，
+/// 表示旧版客户端的设备签名流程与网关要求的 v2/v3 payload 不兼容。
+/// <para>
+/// 迁移指引：始终等待 <c>connect.challenge</c> → 使用服务端 nonce 签名 v2 payload →
+/// 将同一 nonce 放入 <c>connect.params.device.nonce</c>。
+/// </para>
+/// </summary>
+public sealed class DeviceAuthException : Exception
+{
+    /// <summary>服务端返回的错误详情 JSON</summary>
+    public JsonElement? ErrorDetail { get; }
+
+    /// <summary>结构化的 <c>error.details</c>，含 <c>code</c> 和 <c>reason</c></summary>
+    public AuthErrorDetails Details { get; }
+
+    /// <summary>设备认证错误码（<c>DEVICE_AUTH_*</c>），等同于 <see cref="Details"/>.<see cref="AuthErrorDetails.Code"/></summary>
+    public string? DeviceAuthCode => Details.Code;
+
+    /// <summary>诊断原因标识符，等同于 <see cref="Details"/>.<see cref="AuthErrorDetails.Reason"/></summary>
+    public string? Reason => Details.Reason;
+
+    public DeviceAuthException(string message, AuthErrorDetails details, JsonElement? error = null) : base(message)
+    {
+        Details = details;
         ErrorDetail = error;
     }
 }

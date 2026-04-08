@@ -30,7 +30,8 @@ public static class ServiceCollectionExtensions
         services.AddOptions<GatewayOptions>()
             .Configure(configure)
             .Validate(o => !string.IsNullOrWhiteSpace(o.Url), "OpenClaw Gateway URL 不能为空")
-            .Validate(o => !string.IsNullOrWhiteSpace(o.Token), "OpenClaw Gateway Token 不能为空")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.Token) || !string.IsNullOrWhiteSpace(o.Password),
+                "OpenClaw Gateway Token 或 Password 至少需要配置一项")
             .ValidateOnStart();
 
         RegisterCoreServices(services);
@@ -48,7 +49,8 @@ public static class ServiceCollectionExtensions
         services.AddOptions<GatewayOptions>()
             .Bind(configurationSection)
             .Validate(o => !string.IsNullOrWhiteSpace(o.Url), "OpenClaw Gateway URL 不能为空")
-            .Validate(o => !string.IsNullOrWhiteSpace(o.Token), "OpenClaw Gateway Token 不能为空")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.Token) || !string.IsNullOrWhiteSpace(o.Password),
+                "OpenClaw Gateway Token 或 Password 至少需要配置一项")
             .ValidateOnStart();
 
         RegisterCoreServices(services);

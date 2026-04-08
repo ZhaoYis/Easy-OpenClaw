@@ -1,5 +1,7 @@
 using System.Buffers;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using OpenClaw.Core.Models;
 
@@ -12,6 +14,7 @@ namespace OpenClaw.Core.Transport;
 public class WebSocketClient : IAsyncDisposable
 {
     private readonly Uri _uri;
+    private readonly byte[]? _pinnedFingerprint;
     private ClientWebSocket? _ws;
     private CancellationTokenSource? _receiveCts;
     private Task? _receiveTask;
@@ -24,9 +27,10 @@ public class WebSocketClient : IAsyncDisposable
     public virtual bool IsConnected =>
         _ws?.State == WebSocketState.Open;
 
-    public WebSocketClient(Uri uri)
+    public WebSocketClient(Uri uri, string? tlsFingerprint = null)
     {
         _uri = uri;
+        _pinnedFingerprint = NormalizeFingerprint(tlsFingerprint);
     }
 
     public async Task ConnectAsync(CancellationToken ct = default)
@@ -36,6 +40,17 @@ public class WebSocketClient : IAsyncDisposable
         _ws.Options.SetRequestHeader("Origin", GatewayConstants.Transport.Origin);
         _ws.Options.SetRequestHeader("User-Agent", GatewayConstants.Transport.DefaultUserAgent);
         _ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(GatewayConstants.Transport.KeepAliveIntervalSeconds);
+
+        if (_pinnedFingerprint is not null)
+        {
+            _ws.Options.RemoteCertificateValidationCallback = (_, cert, _, _) =>
+            {
+                if (cert is null) return false;
+                using var x509 = new X509Certificate2(cert);
+                var certHash = SHA256.HashData(x509.RawData);
+                return CryptographicOperations.FixedTimeEquals(certHash, _pinnedFingerprint);
+            };
+        }
 
         await _ws.ConnectAsync(_uri, ct);
 
@@ -138,5 +153,15 @@ public class WebSocketClient : IAsyncDisposable
         await CloseAsync();
         _receiveCts?.Dispose();
         _ws?.Dispose();
+    }
+
+    /// <summary>
+    /// 将十六进制指纹字符串（支持冒号分隔或纯 hex）规范化为 32 字节 SHA-256 哈希。
+    /// </summary>
+    internal static byte[]? NormalizeFingerprint(string? fingerprint)
+    {
+        if (string.IsNullOrWhiteSpace(fingerprint)) return null;
+        var hex = fingerprint.Replace(":", "").Replace(" ", "").Trim();
+        return Convert.FromHexString(hex);
     }
 }

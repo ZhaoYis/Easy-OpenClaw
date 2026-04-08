@@ -358,4 +358,105 @@ public sealed class GatewayClientCoreTests
         var (client, _) = GatewayClientTestFactory.CreateWithSocket(c => new LoopbackWebSocket(c));
         GatewayClientPrivateApi.ProcessHelloOk(client, new GatewayResponse { Ok = true, Payload = null });
     }
+
+    // ── DEVICE_AUTH 迁移诊断码测试 ──────────────────────────
+
+    /// <summary>
+    /// <see cref="AuthErrorDetails.IsDeviceAuthError"/> 应正确识别 DEVICE_AUTH_* 前缀。
+    /// </summary>
+    [Theory]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthNonceRequired, true)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthNonceMismatch, true)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthSignatureInvalid, true)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthSignatureExpired, true)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthDeviceIdMismatch, true)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthPublicKeyInvalid, true)]
+    [InlineData(GatewayConstants.ErrorCodes.AuthTokenMismatch, false)]
+    [InlineData(GatewayConstants.ErrorCodes.NotPaired, false)]
+    [InlineData(null, false)]
+    public void AuthErrorDetails_IsDeviceAuthError_identifies_prefix(string? code, bool expected)
+    {
+        var details = new AuthErrorDetails { Code = code };
+        Assert.Equal(expected, details.IsDeviceAuthError);
+    }
+
+    /// <summary>
+    /// <c>TryParseAuthError</c> 应从 <c>error.details</c> 中正确解析 DEVICE_AUTH 码和 reason。
+    /// </summary>
+    [Fact]
+    public void TryParseAuthError_parses_device_auth_details()
+    {
+        var error = JsonSerializer.SerializeToElement(new
+        {
+            message = "device nonce required",
+            details = new
+            {
+                code = GatewayConstants.ErrorCodes.DeviceAuthNonceRequired,
+                reason = GatewayConstants.DeviceAuthReasons.NonceMissing,
+            },
+        }, JsonDefaults.SerializerOptions);
+
+        var result = GatewayClientPrivateApi.TryParseAuthError(error);
+
+        Assert.NotNull(result);
+        Assert.Equal(GatewayConstants.ErrorCodes.DeviceAuthNonceRequired, result!.Code);
+        Assert.Equal(GatewayConstants.DeviceAuthReasons.NonceMissing, result.Reason);
+        Assert.True(result.IsDeviceAuthError);
+    }
+
+    /// <summary>
+    /// <c>TryParseAuthError</c> 应从 <c>error</c> 顶层含 code 字段时回退解析。
+    /// </summary>
+    [Fact]
+    public void TryParseAuthError_parses_device_auth_from_top_level_code()
+    {
+        var error = JsonSerializer.SerializeToElement(new
+        {
+            code = GatewayConstants.ErrorCodes.DeviceAuthSignatureExpired,
+            reason = GatewayConstants.DeviceAuthReasons.SignatureStale,
+        }, JsonDefaults.SerializerOptions);
+
+        var result = GatewayClientPrivateApi.TryParseAuthError(error);
+
+        Assert.NotNull(result);
+        Assert.Equal(GatewayConstants.ErrorCodes.DeviceAuthSignatureExpired, result!.Code);
+        Assert.Equal(GatewayConstants.DeviceAuthReasons.SignatureStale, result.Reason);
+        Assert.True(result.IsDeviceAuthError);
+    }
+
+    /// <summary>
+    /// <see cref="DeviceAuthException"/> 应保留结构化的 <see cref="AuthErrorDetails"/>。
+    /// </summary>
+    [Fact]
+    public void DeviceAuthException_stores_details_and_json()
+    {
+        var details = new AuthErrorDetails
+        {
+            Code = GatewayConstants.ErrorCodes.DeviceAuthNonceMismatch,
+            Reason = GatewayConstants.DeviceAuthReasons.NonceMismatch,
+        };
+        var err = JsonSerializer.SerializeToElement(new { message = "device nonce mismatch" }, JsonDefaults.SerializerOptions);
+        var ex = new DeviceAuthException("device nonce mismatch", details, err);
+
+        Assert.Equal(GatewayConstants.ErrorCodes.DeviceAuthNonceMismatch, ex.DeviceAuthCode);
+        Assert.Equal(GatewayConstants.DeviceAuthReasons.NonceMismatch, ex.Reason);
+        Assert.NotNull(ex.ErrorDetail);
+        Assert.Equal(details, ex.Details);
+    }
+
+    /// <summary>
+    /// 所有 DEVICE_AUTH 错误码常量应与文档定义的 DeviceAuthReasons 一一对应。
+    /// </summary>
+    [Theory]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthNonceRequired, GatewayConstants.DeviceAuthReasons.NonceMissing)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthNonceMismatch, GatewayConstants.DeviceAuthReasons.NonceMismatch)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthSignatureInvalid, GatewayConstants.DeviceAuthReasons.Signature)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthSignatureExpired, GatewayConstants.DeviceAuthReasons.SignatureStale)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthDeviceIdMismatch, GatewayConstants.DeviceAuthReasons.DeviceIdMismatch)]
+    [InlineData(GatewayConstants.ErrorCodes.DeviceAuthPublicKeyInvalid, GatewayConstants.DeviceAuthReasons.PublicKey)]
+    public void DeviceAuth_codes_and_reasons_are_paired(string code, string reason)
+    {
+        Assert.StartsWith(GatewayConstants.ErrorCodes.DeviceAuthPrefix, code);
+        Assert.False(string.IsNullOrEmpty(reason));
+    }
 }

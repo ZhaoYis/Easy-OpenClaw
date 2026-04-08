@@ -21,6 +21,7 @@ builder.Services.PostConfigure<GatewayOptions>(opts =>
 {
     opts.KeyFilePath ??= Path.Combine(stateDir, GatewayConstants.FileNames.DeviceKey);
     opts.DeviceTokenFilePath ??= Path.Combine(stateDir, GatewayConstants.FileNames.DeviceToken);
+    opts.DeviceScopesFilePath ??= Path.Combine(stateDir, GatewayConstants.FileNames.DeviceScopes);
 });
 
 builder.Services.UseOpenClawEventSubscriber();

@@ -37,11 +37,11 @@ internal static class GatewayClientPrivateApi
     /// <summary>
     /// 反射调用私有实例方法 <c>BuildConnectParams</c>，验证连接参数拼装（含签名字段）。
     /// </summary>
-    public static ConnectParams BuildConnectParams(GatewayClient client, string nonce)
+    public static ConnectParams BuildConnectParams(GatewayClient client, string nonce, bool deviceTokenOnly = false)
     {
         var mi = typeof(GatewayClient).GetMethod("BuildConnectParams", Instance)
                  ?? throw new InvalidOperationException("BuildConnectParams not found");
-        return (ConnectParams)mi.Invoke(client, [nonce])!;
+        return (ConnectParams)mi.Invoke(client, [nonce, deviceTokenOnly])!;
     }
 
     /// <summary>
@@ -52,6 +52,16 @@ internal static class GatewayClientPrivateApi
         var mi = typeof(GatewayClient).GetMethod("IsNotPairedError", Static)
                  ?? throw new InvalidOperationException("IsNotPairedError not found");
         return (bool)mi.Invoke(null, [error])!;
+    }
+
+    /// <summary>
+    /// 反射调用静态方法 <c>TryParseAuthError</c>，解析认证/设备认证错误详情。
+    /// </summary>
+    public static AuthErrorDetails? TryParseAuthError(JsonElement? error)
+    {
+        var mi = typeof(GatewayClient).GetMethod("TryParseAuthError", Static)
+                 ?? throw new InvalidOperationException("TryParseAuthError not found");
+        return (AuthErrorDetails?)mi.Invoke(null, [error]);
     }
 
     /// <summary>

@@ -18,6 +18,16 @@ public sealed class GatewayOptions
     /// <summary>Gateway 访问令牌，需与网关配置中的 token 一致</summary>
     public string Token { get; set; } = "";
 
+    /// <summary>Gateway 访问密码，与 Token 二选一（取决于网关 auth mode 配置）</summary>
+    public string? Password { get; set; }
+
+    /// <summary>
+    /// 可选的网关 TLS 证书 SHA-256 指纹（hex 编码，冒号分隔或纯 hex 均可），
+    /// 用于证书固定（certificate pinning）。设置后客户端将仅接受指纹匹配的服务端证书。
+    /// 对应 CLI <c>--tls-fingerprint</c> 或配置 <c>gateway.remote.tlsFingerprint</c>。
+    /// </summary>
+    public string? TlsFingerprint { get; set; }
+
     /// <summary>
     /// Ed25519 设备私钥种子的持久化文件路径（hex 编码），为 null 则使用临时密钥。
     /// <see cref="GatewayConstants.FileNames.DeviceKey"/>
@@ -29,6 +39,12 @@ public sealed class GatewayOptions
     /// <see cref="GatewayConstants.FileNames.DeviceToken"/>
     /// </summary>
     public string? DeviceTokenFilePath { get; set; }
+
+    /// <summary>
+    /// 服务端授予的 scope 集合缓存文件路径，重连时复用已授予的作用域。
+    /// <see cref="GatewayConstants.FileNames.DeviceScopes"/>
+    /// </summary>
+    public string? DeviceScopesFilePath { get; set; }
 
     /// <summary>
     /// 客户端标识符。

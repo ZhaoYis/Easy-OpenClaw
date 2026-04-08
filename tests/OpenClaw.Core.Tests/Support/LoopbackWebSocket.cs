@@ -137,3 +137,46 @@ internal sealed class RpcErrorLoopbackWebSocket : LoopbackWebSocket
         return JsonSerializer.Serialize(body, JsonDefaults.SerializerOptions);
     }
 }
+
+/// <summary>
+/// 对 connect RPC 返回 <c>DEVICE_AUTH_*</c> 诊断错误，用于覆盖设备认证迁移失败分支。
+/// </summary>
+internal sealed class DeviceAuthErrorLoopbackWebSocket : LoopbackWebSocket
+{
+    private readonly string _code;
+    private readonly string _reason;
+    private readonly string _message;
+
+    public DeviceAuthErrorLoopbackWebSocket(
+        GatewayClient client,
+        string code = GatewayConstants.ErrorCodes.DeviceAuthNonceRequired,
+        string reason = GatewayConstants.DeviceAuthReasons.NonceMissing,
+        string message = "device nonce required") : base(client)
+    {
+        _code = code;
+        _reason = reason;
+        _message = message;
+    }
+
+    /// <inheritdoc />
+    protected override string BuildResponseJson(string requestId, JsonElement requestRoot)
+    {
+        _ = requestRoot;
+        var body = new
+        {
+            type = GatewayConstants.FrameTypes.Response,
+            id = requestId,
+            ok = false,
+            error = new
+            {
+                message = _message,
+                details = new
+                {
+                    code = _code,
+                    reason = _reason,
+                },
+            },
+        };
+        return JsonSerializer.Serialize(body, JsonDefaults.SerializerOptions);
+    }
+}

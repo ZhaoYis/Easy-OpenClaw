@@ -717,6 +717,74 @@ public static class GatewayConstants
     {
         /// <summary>设备尚未完成配对审批，需要在 Gateway 控制面板中手动批准</summary>
         public const string NotPaired = "NOT_PAIRED";
+
+        /// <summary>
+        /// 共享密钥/密码与网关当前配置不匹配。
+        /// 可信客户端可用缓存的 per-device token 做一次有界重试。
+        /// </summary>
+        public const string AuthTokenMismatch = "AUTH_TOKEN_MISMATCH";
+
+        // ── 设备认证迁移诊断码（DEVICE_AUTH_*）─────────────────
+        // 当旧版客户端仍使用 pre-challenge 签名行为时，
+        // connect 在 error.details.code 中返回以下码。
+
+        /// <summary>所有 DEVICE_AUTH 错误码的公共前缀，用于批量匹配</summary>
+        public const string DeviceAuthPrefix = "DEVICE_AUTH_";
+
+        /// <summary>客户端遗漏了 <c>device.nonce</c>（或发送了空白值）</summary>
+        public const string DeviceAuthNonceRequired = "DEVICE_AUTH_NONCE_REQUIRED";
+
+        /// <summary>客户端使用了过期/错误的 nonce 进行签名</summary>
+        public const string DeviceAuthNonceMismatch = "DEVICE_AUTH_NONCE_MISMATCH";
+
+        /// <summary>签名 payload 与 v2 payload 不匹配</summary>
+        public const string DeviceAuthSignatureInvalid = "DEVICE_AUTH_SIGNATURE_INVALID";
+
+        /// <summary>签名时间戳超出允许的偏移量</summary>
+        public const string DeviceAuthSignatureExpired = "DEVICE_AUTH_SIGNATURE_EXPIRED";
+
+        /// <summary><c>device.id</c> 与公钥指纹不匹配</summary>
+        public const string DeviceAuthDeviceIdMismatch = "DEVICE_AUTH_DEVICE_ID_MISMATCH";
+
+        /// <summary>公钥格式/规范化失败</summary>
+        public const string DeviceAuthPublicKeyInvalid = "DEVICE_AUTH_PUBLIC_KEY_INVALID";
+    }
+
+    /// <summary>
+    /// 设备认证迁移诊断时 <c>error.details.reason</c> 的稳定字符串值。
+    /// 与 <see cref="ErrorCodes"/> 中的 <c>DEVICE_AUTH_*</c> 码一一对应。
+    /// </summary>
+    public static class DeviceAuthReasons
+    {
+        /// <summary>对应 <see cref="ErrorCodes.DeviceAuthNonceRequired"/></summary>
+        public const string NonceMissing = "device-nonce-missing";
+
+        /// <summary>对应 <see cref="ErrorCodes.DeviceAuthNonceMismatch"/></summary>
+        public const string NonceMismatch = "device-nonce-mismatch";
+
+        /// <summary>对应 <see cref="ErrorCodes.DeviceAuthSignatureInvalid"/></summary>
+        public const string Signature = "device-signature";
+
+        /// <summary>对应 <see cref="ErrorCodes.DeviceAuthSignatureExpired"/></summary>
+        public const string SignatureStale = "device-signature-stale";
+
+        /// <summary>对应 <see cref="ErrorCodes.DeviceAuthDeviceIdMismatch"/></summary>
+        public const string DeviceIdMismatch = "device-id-mismatch";
+
+        /// <summary>对应 <see cref="ErrorCodes.DeviceAuthPublicKeyInvalid"/></summary>
+        public const string PublicKey = "device-public-key";
+    }
+
+    /// <summary>
+    /// 认证失败时 <c>error.details.recommendedNextStep</c> 的可选值。
+    /// </summary>
+    public static class AuthRecoveryHints
+    {
+        public const string RetryWithDeviceToken = "retry_with_device_token";
+        public const string UpdateAuthConfiguration = "update_auth_configuration";
+        public const string UpdateAuthCredentials = "update_auth_credentials";
+        public const string WaitThenRetry = "wait_then_retry";
+        public const string ReviewAuthConfiguration = "review_auth_configuration";
     }
 
     /// <summary>
@@ -816,5 +884,8 @@ public static class GatewayConstants
 
         /// <summary>网关签发的 DeviceToken 的默认文件名</summary>
         public const string DeviceToken = "device.token";
+
+        /// <summary>服务端授予的 scope 集合缓存文件名（JSON 数组），随 DeviceToken 一同缓存</summary>
+        public const string DeviceScopes = "device.scopes";
     }
 }
