@@ -49,10 +49,11 @@ var turnComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuations
 
 // ─── Register ALL Event Handlers via Subscriber ─────────
 
+//注册默认的回调函数
+eventSubscriber.RegisterAppLayerDebugCallbacks();
+
 eventSubscriber.FirstDeltaReceived += () => { Log.ReplaceThinkingWithContent(); };
-
 eventSubscriber.AgentDeltaReceived += delta => { Log.StreamDelta(delta); };
-
 eventSubscriber.ChatTurnCompleted += () =>
 {
     sw.Stop();
@@ -60,7 +61,6 @@ eventSubscriber.ChatTurnCompleted += () =>
     Log.EndConversationTurn();
     turnComplete.TrySetResult();
 };
-
 eventSubscriber.ShutdownReceived += _ => { cts.Cancel(); };
 
 eventSubscriber.RegisterAll();

@@ -7,8 +7,8 @@ namespace OpenClaw.Core.Client;
 /// <summary>
 /// 网关事件订阅管理器。
 /// 将所有服务端推送事件的注册逻辑集中管理，每个事件提取关键字段并打印到控制台。
-/// 通过 C# event 回调通知调用方，实现事件处理逻辑与 UI/业务逻辑的解耦。
-/// 事件名常量定义于 <see cref="GatewayConstants.Events"/>。
+/// 通过 C# event 向应用层回调（含 Agent 流式 delta、回合结束、关机，以及各协议事件的强类型通知），实现与 UI/业务逻辑的解耦。
+/// 事件名常量定义于 <see cref="GatewayConstants.Events"/>；其余强类型通知载荷定义于 <c>OpenClaw.Core.Models</c> 命名空间（文件名 <c>GatewaySubscriberAppNotifications.cs</c>）。
 /// </summary>
 public sealed class GatewayEventSubscriber
 {
@@ -39,6 +39,81 @@ public sealed class GatewayEventSubscriber
 
     /// <summary>网关发送关闭通知时触发，参数为关闭原因（可能为 null）</summary>
     public event Action<string?>? ShutdownReceived;
+
+    /// <summary>收到 connect_challenge 时触发，携带 nonce 与时间戳</summary>
+    public event Action<ConnectChallengeNotification>? ConnectChallengeReceived;
+
+    /// <summary>agent 事件中非 assistant+delta 分支时触发（其它 stream 或结构）</summary>
+    public event Action<AgentOtherStreamNotification>? AgentOtherStreamReceived;
+
+    /// <summary>每次收到 chat 事件时触发（含 pending/streaming/final 及 kind/type）</summary>
+    public event Action<ChatNotification>? ChatReceived;
+
+    /// <summary>收到 chat.inject 时触发</summary>
+    public event Action<ChatInjectNotification>? ChatInjectReceived;
+
+    /// <summary>收到 session.message 时触发</summary>
+    public event Action<SessionMessageNotification>? SessionMessageReceived;
+
+    /// <summary>收到 session.tool 时触发</summary>
+    public event Action<SessionToolNotification>? SessionToolReceived;
+
+    /// <summary>收到 sessions.changed 时触发</summary>
+    public event Action<SessionsChangedNotification>? SessionsChangedReceived;
+
+    /// <summary>收到 presence 时触发</summary>
+    public event Action<PresenceNotification>? PresenceReceived;
+
+    /// <summary>收到 tick 保活信号时触发</summary>
+    public event Action? TickReceived;
+
+    /// <summary>收到 talk_mode 时触发</summary>
+    public event Action<TalkModeNotification>? TalkModeReceived;
+
+    /// <summary>收到 health 时触发</summary>
+    public event Action<HealthNotification>? HealthReceived;
+
+    /// <summary>收到 heartbeat 时触发</summary>
+    public event Action<HeartbeatNotification>? HeartbeatReceived;
+
+    /// <summary>收到 cron 时触发</summary>
+    public event Action<CronNotification>? CronReceived;
+
+    /// <summary>收到 node_pair_requested 时触发</summary>
+    public event Action<NodePairRequestedNotification>? NodePairRequestedReceived;
+
+    /// <summary>收到 node_pair_resolved 时触发</summary>
+    public event Action<NodePairResolvedNotification>? NodePairResolvedReceived;
+
+    /// <summary>收到 node_invoke_request 时触发</summary>
+    public event Action<NodeInvokeRequestNotification>? NodeInvokeRequestReceived;
+
+    /// <summary>收到 device_pair_requested 时触发</summary>
+    public event Action<DevicePairRequestedNotification>? DevicePairRequestedReceived;
+
+    /// <summary>收到 device_pair_resolved 时触发</summary>
+    public event Action<DevicePairResolvedNotification>? DevicePairResolvedReceived;
+
+    /// <summary>收到 voicewake_changed 时触发</summary>
+    public event Action<VoicewakeChangedNotification>? VoicewakeChangedReceived;
+
+    /// <summary>收到 exec_approval_requested 时触发</summary>
+    public event Action<ExecApprovalRequestedNotification>? ExecApprovalRequestedReceived;
+
+    /// <summary>收到 exec_approval_resolved 时触发</summary>
+    public event Action<ExecApprovalResolvedNotification>? ExecApprovalResolvedReceived;
+
+    /// <summary>收到 plugin_approval_requested 时触发</summary>
+    public event Action<PluginApprovalRequestedNotification>? PluginApprovalRequestedReceived;
+
+    /// <summary>收到 plugin_approval_resolved 时触发</summary>
+    public event Action<PluginApprovalResolvedNotification>? PluginApprovalResolvedReceived;
+
+    /// <summary>收到 update_available 时触发</summary>
+    public event Action<UpdateAvailableNotification>? UpdateAvailableReceived;
+
+    /// <summary>通配符路由发现未知事件名时触发（已知事件不会重复上报）</summary>
+    public event Action<UnknownGatewayEventNotification>? UnknownGatewayEventReceived;
 
     // ═══════════════════════════════════════════════════════════
     //  注册所有事件
@@ -95,6 +170,7 @@ public sealed class GatewayEventSubscriber
             var nonce = GetString(evt, "nonce");
             var ts = GetString(evt, "ts");
             Log.Event(GatewayConstants.Events.ConnectChallenge, $"nonce={Truncate(nonce, 16)}, ts={ts}");
+            ConnectChallengeReceived?.Invoke(new ConnectChallengeNotification(nonce, ts));
             return Task.CompletedTask;
         });
     }
@@ -116,7 +192,7 @@ public sealed class GatewayEventSubscriber
             var stream = p.TryGetProperty("stream", out var s) ? s.GetString() : null;
 
             if (stream == GatewayConstants.StreamTypes.Assistant && p.TryGetProperty("data", out var data)
-                                      && data.TryGetProperty("delta", out var delta))
+                                                                 && data.TryGetProperty("delta", out var delta))
             {
                 var text = delta.GetString() ?? "";
 
@@ -130,7 +206,9 @@ public sealed class GatewayEventSubscriber
             }
             else
             {
-                Log.Event(GatewayConstants.Events.Agent, $"stream={stream ?? "?"}, keys=[{GetKeys(p)}]");
+                var keys = GetKeys(p);
+                Log.Event(GatewayConstants.Events.Agent, $"stream={stream ?? "?"}, keys=[{keys}]");
+                AgentOtherStreamReceived?.Invoke(new AgentOtherStreamNotification(stream, keys));
             }
 
             return Task.CompletedTask;
@@ -144,6 +222,7 @@ public sealed class GatewayEventSubscriber
                 if (state is GatewayConstants.ChatStates.Pending or GatewayConstants.ChatStates.Streaming)
                     firstDelta = false;
             }
+
             return Task.CompletedTask;
         });
     }
@@ -168,6 +247,8 @@ public sealed class GatewayEventSubscriber
             Log.Event(GatewayConstants.Events.Chat,
                 $"state={state}, session={sessionKey}, kind={kind ?? "-"}, type={type ?? "-"}");
 
+            ChatReceived?.Invoke(new ChatNotification(state, sessionKey, kind, type));
+
             if (state == GatewayConstants.ChatStates.Final)
                 ChatTurnCompleted?.Invoke();
 
@@ -190,6 +271,7 @@ public sealed class GatewayEventSubscriber
 
             Log.Event(GatewayConstants.Events.ChatInject,
                 $"session={sessionKey}, role={role}, messageId={Truncate(messageId ?? "", 24)}");
+            ChatInjectReceived?.Invoke(new ChatInjectNotification(sessionKey, role, messageId));
             return Task.CompletedTask;
         });
     }
@@ -209,6 +291,7 @@ public sealed class GatewayEventSubscriber
 
             Log.Event(GatewayConstants.Events.SessionMessage,
                 $"session={sessionKey}, messageId={Truncate(messageId ?? "", 24)}, role={role}");
+            SessionMessageReceived?.Invoke(new SessionMessageNotification(sessionKey, messageId, role));
             return Task.CompletedTask;
         });
     }
@@ -229,6 +312,7 @@ public sealed class GatewayEventSubscriber
 
             Log.Event(GatewayConstants.Events.SessionTool,
                 $"session={sessionKey}, toolCallId={Truncate(toolCallId ?? "", 20)}, tool={toolName}, phase={phase}");
+            SessionToolReceived?.Invoke(new SessionToolNotification(sessionKey, toolCallId, toolName, phase));
             return Task.CompletedTask;
         });
     }
@@ -247,6 +331,7 @@ public sealed class GatewayEventSubscriber
 
             Log.Event(GatewayConstants.Events.SessionsChanged,
                 $"reason={reason}, session={sessionKey}, keys=[{GetKeys(p)}]");
+            SessionsChangedReceived?.Invoke(new SessionsChangedNotification(reason, sessionKey));
             return Task.CompletedTask;
         });
     }
@@ -266,7 +351,9 @@ public sealed class GatewayEventSubscriber
             var mode = p.TryGetProperty("mode", out var m) ? m.GetString() : null;
             var host = p.TryGetProperty("host", out var h) ? h.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.Presence, $"reason={reason}, device={Truncate(deviceId ?? "", 12)}, mode={mode}, host={host}");
+            Log.Event(GatewayConstants.Events.Presence,
+                $"reason={reason}, device={Truncate(deviceId ?? "", 12)}, mode={mode}, host={host}");
+            PresenceReceived?.Invoke(new PresenceNotification(reason, deviceId, mode, host));
             return Task.CompletedTask;
         });
     }
@@ -279,6 +366,7 @@ public sealed class GatewayEventSubscriber
         _client.OnEvent(GatewayConstants.Events.Tick, _ =>
         {
             Log.Debug("tick");
+            TickReceived?.Invoke();
             return Task.CompletedTask;
         });
     }
@@ -296,6 +384,7 @@ public sealed class GatewayEventSubscriber
             var active = p.TryGetProperty("active", out var a) ? a.ToString() : null;
 
             Log.Event(GatewayConstants.Events.TalkMode, $"mode={mode}, active={active}");
+            TalkModeReceived?.Invoke(new TalkModeNotification(mode, active));
             return Task.CompletedTask;
         });
     }
@@ -309,7 +398,8 @@ public sealed class GatewayEventSubscriber
         _client.OnEvent(GatewayConstants.Events.Shutdown, evt =>
         {
             var reason = evt.Payload is { } p && p.TryGetProperty("reason", out var r)
-                ? r.GetString() : null;
+                ? r.GetString()
+                : null;
 
             Log.Warn($"Gateway 正在关闭 (reason={reason ?? "unknown"})");
             ShutdownReceived?.Invoke(reason);
@@ -327,12 +417,17 @@ public sealed class GatewayEventSubscriber
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
-            var ok = p.TryGetProperty("ok", out var o) ? o.GetBoolean().ToString() : "?";
-            var channels = p.TryGetProperty("channels", out var ch) ? ch.EnumerateObject().Count().ToString() : "0";
-            var agents = p.TryGetProperty("agents", out var ag) && ag.ValueKind == JsonValueKind.Array
-                ? ag.GetArrayLength().ToString() : "0";
+            bool? okVal = p.TryGetProperty("ok", out var okEl) ? okEl.GetBoolean() : null;
+            var okLog = okVal?.ToString() ?? "?";
+            var channelCount = p.TryGetProperty("channels", out var ch) && ch.ValueKind == JsonValueKind.Object
+                ? ch.EnumerateObject().Count()
+                : 0;
+            var agentCount = p.TryGetProperty("agents", out var ag) && ag.ValueKind == JsonValueKind.Array
+                ? ag.GetArrayLength()
+                : 0;
 
-            Log.Event(GatewayConstants.Events.Health, $"ok={ok}, channels={channels}, agents={agents}");
+            Log.Event(GatewayConstants.Events.Health, $"ok={okLog}, channels={channelCount}, agents={agentCount}");
+            HealthReceived?.Invoke(new HealthNotification(okVal, channelCount, agentCount));
             return Task.CompletedTask;
         });
     }
@@ -350,6 +445,7 @@ public sealed class GatewayEventSubscriber
             var sessionKey = p.TryGetProperty("sessionKey", out var sk) ? sk.GetString() : null;
 
             Log.Event(GatewayConstants.Events.Heartbeat, $"agent={agentId}, session={sessionKey}");
+            HeartbeatReceived?.Invoke(new HeartbeatNotification(agentId, sessionKey));
             return Task.CompletedTask;
         });
     }
@@ -367,6 +463,7 @@ public sealed class GatewayEventSubscriber
             var cronId = p.TryGetProperty("cronId", out var c) ? c.GetString() : null;
 
             Log.Event(GatewayConstants.Events.Cron, $"action={action}, cronId={cronId}");
+            CronReceived?.Invoke(new CronNotification(action, cronId));
             return Task.CompletedTask;
         });
     }
@@ -385,7 +482,9 @@ public sealed class GatewayEventSubscriber
             var nodeId = p.TryGetProperty("nodeId", out var n) ? n.GetString() : null;
             var label = p.TryGetProperty("label", out var l) ? l.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.NodePairRequested, $"requestId={requestId}, nodeId={Truncate(nodeId ?? "", 12)}, label={label}");
+            Log.Event(GatewayConstants.Events.NodePairRequested,
+                $"requestId={requestId}, nodeId={Truncate(nodeId ?? "", 12)}, label={label}");
+            NodePairRequestedReceived?.Invoke(new NodePairRequestedNotification(requestId, nodeId, label));
             return Task.CompletedTask;
         });
     }
@@ -404,7 +503,9 @@ public sealed class GatewayEventSubscriber
             var status = p.TryGetProperty("status", out var s) ? s.GetString() : null;
             var nodeId = p.TryGetProperty("nodeId", out var n) ? n.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.NodePairResolved, $"requestId={requestId}, status={status}, nodeId={Truncate(nodeId ?? "", 12)}");
+            Log.Event(GatewayConstants.Events.NodePairResolved,
+                $"requestId={requestId}, status={status}, nodeId={Truncate(nodeId ?? "", 12)}");
+            NodePairResolvedReceived?.Invoke(new NodePairResolvedNotification(requestId, status, nodeId));
             return Task.CompletedTask;
         });
     }
@@ -423,7 +524,9 @@ public sealed class GatewayEventSubscriber
             var method = p.TryGetProperty("method", out var m) ? m.GetString() : null;
             var nodeId = p.TryGetProperty("nodeId", out var n) ? n.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.NodeInvokeRequest, $"invId={Truncate(invocationId ?? "", 12)}, method={method}, node={Truncate(nodeId ?? "", 12)}");
+            Log.Event(GatewayConstants.Events.NodeInvokeRequest,
+                $"invId={Truncate(invocationId ?? "", 12)}, method={method}, node={Truncate(nodeId ?? "", 12)}");
+            NodeInvokeRequestReceived?.Invoke(new NodeInvokeRequestNotification(invocationId, method, nodeId));
             return Task.CompletedTask;
         });
     }
@@ -442,7 +545,9 @@ public sealed class GatewayEventSubscriber
             var deviceId = p.TryGetProperty("deviceId", out var d) ? d.GetString() : null;
             var platform = p.TryGetProperty("platform", out var pl) ? pl.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.DevicePairRequested, $"requestId={requestId}, device={Truncate(deviceId ?? "", 12)}, platform={platform}");
+            Log.Event(GatewayConstants.Events.DevicePairRequested,
+                $"requestId={requestId}, device={Truncate(deviceId ?? "", 12)}, platform={platform}");
+            DevicePairRequestedReceived?.Invoke(new DevicePairRequestedNotification(requestId, deviceId, platform));
             return Task.CompletedTask;
         });
     }
@@ -461,7 +566,9 @@ public sealed class GatewayEventSubscriber
             var status = p.TryGetProperty("status", out var s) ? s.GetString() : null;
             var deviceId = p.TryGetProperty("deviceId", out var d) ? d.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.DevicePairResolved, $"requestId={requestId}, status={status}, device={Truncate(deviceId ?? "", 12)}");
+            Log.Event(GatewayConstants.Events.DevicePairResolved,
+                $"requestId={requestId}, status={status}, device={Truncate(deviceId ?? "", 12)}");
+            DevicePairResolvedReceived?.Invoke(new DevicePairResolvedNotification(requestId, status, deviceId));
             return Task.CompletedTask;
         });
     }
@@ -474,7 +581,9 @@ public sealed class GatewayEventSubscriber
         _client.OnEvent(GatewayConstants.Events.VoicewakeChanged, evt =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
-            Log.Event(GatewayConstants.Events.VoicewakeChanged, $"payload=[{GetKeys(p)}]");
+            var vk = GetKeys(p);
+            Log.Event(GatewayConstants.Events.VoicewakeChanged, $"payload=[{vk}]");
+            VoicewakeChangedReceived?.Invoke(new VoicewakeChangedNotification(vk));
             return Task.CompletedTask;
         });
     }
@@ -493,7 +602,9 @@ public sealed class GatewayEventSubscriber
             var tool = p.TryGetProperty("tool", out var t) ? t.GetString() : null;
             var command = p.TryGetProperty("command", out var c) ? c.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.ExecApprovalRequested, $"approvalId={approvalId}, tool={tool}, command={Truncate(command ?? "", 60)}");
+            Log.Event(GatewayConstants.Events.ExecApprovalRequested,
+                $"approvalId={approvalId}, tool={tool}, command={Truncate(command ?? "", 60)}");
+            ExecApprovalRequestedReceived?.Invoke(new ExecApprovalRequestedNotification(approvalId, tool, command));
             return Task.CompletedTask;
         });
     }
@@ -512,6 +623,7 @@ public sealed class GatewayEventSubscriber
             var decision = p.TryGetProperty("decision", out var d) ? d.GetString() : null;
 
             Log.Event(GatewayConstants.Events.ExecApprovalResolved, $"approvalId={approvalId}, decision={decision}");
+            ExecApprovalResolvedReceived?.Invoke(new ExecApprovalResolvedNotification(approvalId, decision));
             return Task.CompletedTask;
         });
     }
@@ -530,7 +642,10 @@ public sealed class GatewayEventSubscriber
             var plugin = p.TryGetProperty("plugin", out var pl) ? pl.GetString() : null;
             var description = p.TryGetProperty("description", out var d) ? d.GetString() : null;
 
-            Log.Event(GatewayConstants.Events.PluginApprovalRequested, $"approvalId={approvalId}, plugin={plugin}, description={Truncate(description ?? "", 60)}");
+            Log.Event(GatewayConstants.Events.PluginApprovalRequested,
+                $"approvalId={approvalId}, plugin={plugin}, description={Truncate(description ?? "", 60)}");
+            PluginApprovalRequestedReceived?.Invoke(
+                new PluginApprovalRequestedNotification(approvalId, plugin, description));
             return Task.CompletedTask;
         });
     }
@@ -549,6 +664,7 @@ public sealed class GatewayEventSubscriber
             var decision = p.TryGetProperty("decision", out var d) ? d.GetString() : null;
 
             Log.Event(GatewayConstants.Events.PluginApprovalResolved, $"approvalId={approvalId}, decision={decision}");
+            PluginApprovalResolvedReceived?.Invoke(new PluginApprovalResolvedNotification(approvalId, decision));
             return Task.CompletedTask;
         });
     }
@@ -568,6 +684,7 @@ public sealed class GatewayEventSubscriber
             var channel = p.TryGetProperty("channel", out var ch) ? ch.GetString() : null;
 
             Log.Warn($"[{GatewayConstants.Events.UpdateAvailable}] {current} → {latest} (channel={channel})");
+            UpdateAvailableReceived?.Invoke(new UpdateAvailableNotification(current, latest, channel));
             return Task.CompletedTask;
         });
     }
@@ -581,7 +698,12 @@ public sealed class GatewayEventSubscriber
         _client.Events.On(GatewayConstants.Events.Wildcard, evt =>
         {
             if (!KnownEvents.Contains(evt.Event))
-                Log.Event($"[unknown] {evt.Event}", evt.Payload?.GetRawText() is { } r ? Truncate(r, 120) : "");
+            {
+                var preview = evt.Payload?.GetRawText() is { } r ? Truncate(r, 120) : null;
+                Log.Event($"[unknown] {evt.Event}", preview ?? "");
+                UnknownGatewayEventReceived?.Invoke(new UnknownGatewayEventNotification(evt.Event, preview));
+            }
+
             return Task.CompletedTask;
         });
     }
