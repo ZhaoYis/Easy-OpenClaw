@@ -103,7 +103,7 @@ try
     await client.ExecApprovalsGetAsync(cts.Token);
     await client.VoicewakeGetAsync(cts.Token);
     await client.LastHeartbeatAsync(cts.Token);
-    await client.UsageStatusAsync(cts.Token);
+    await ProbeWithRetryAsync(() => client.UsageStatusAsync(cts.Token));
     await client.TalkConfigAsync(ct: cts.Token);
     await client.AgentIdentityGetAsync(cts.Token);
     await client.SystemPresenceAsync(cts.Token);
@@ -112,7 +112,7 @@ try
     await client.CronStatusAsync(cts.Token);
     await client.DoctorMemoryStatusAsync(cts.Token);
     await client.TtsProvidersAsync(cts.Token);
-    await client.UsageCostAsync(ct: cts.Token);
+    await ProbeWithRetryAsync(() => client.UsageCostAsync(ct: cts.Token));
     var probeSession = client.HelloOk?.Snapshot?.SessionDefaults?.MainSessionKey ?? GatewayConstants.DefaultSessionKey;
     await client.SessionsGetAsync(probeSession, cts.Token);
     await client.SessionsResolveAsync(probeSession, cts.Token);
@@ -223,6 +223,23 @@ Console.WriteLine();
 return 0;
 
 // ─── Helpers ────────────────────────────────────────────
+
+static async Task ProbeWithRetryAsync(Func<Task<GatewayResponse>> call, int maxRetries = 1)
+{
+    for (var attempt = 0; attempt <= maxRetries; attempt++)
+    {
+        var resp = await call();
+        if (resp.Ok) return;
+
+        var err = resp.Error?.GetRawText() ?? "";
+        var isTransient = err.Contains("UNAVAILABLE", StringComparison.OrdinalIgnoreCase)
+                          || err.Contains("DEADLINE_EXCEEDED", StringComparison.OrdinalIgnoreCase)
+                          || err.Contains("AbortError", StringComparison.OrdinalIgnoreCase);
+        if (!isTransient || attempt == maxRetries) return;
+
+        await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+    }
+}
 
 static void PrintBanner()
 {

@@ -29,7 +29,10 @@ public sealed partial class GatewayClient
         else
         {
             var err = resp.Error?.GetRawText() ?? "unknown";
-            Log.Error($"[{method}] 失败 → {err}");
+            if (IsTransientError(err))
+                Log.Warn($"[{method}] 服务暂时不可用 → {err}");
+            else
+                Log.Error($"[{method}] 失败 → {err}");
         }
 
         return resp;
@@ -47,6 +50,39 @@ public sealed partial class GatewayClient
                 new { skipped = true, reason = "not_advertised", method },
                 JsonDefaults.SerializerOptions),
         };
+
+    /// <summary>
+    /// 带重试的调用入口。对瞬态错误（UNAVAILABLE、DEADLINE_EXCEEDED 等）自动重试。
+    /// </summary>
+    /// <param name="method">RPC 方法名</param>
+    /// <param name="parameters">请求参数，为 null 时发送空对象</param>
+    /// <param name="ct">取消令牌</param>
+    /// <param name="maxRetries">最大重试次数，默认 1</param>
+    internal async Task<GatewayResponse> InvokeWithRetryAsync(
+        string method, object? parameters = null, CancellationToken ct = default, int maxRetries = 1)
+    {
+        for (var attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            var resp = await InvokeAsync(method, parameters, ct);
+            if (resp.Ok || attempt == maxRetries)
+                return resp;
+
+            var err = resp.Error?.GetRawText() ?? "";
+            if (!IsTransientError(err))
+                return resp;
+
+            var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+            Log.Info($"[{method}] 将在 {delay.TotalSeconds:F0}s 后重试 ({attempt + 1}/{maxRetries})…");
+            await Task.Delay(delay, ct);
+        }
+
+        return await InvokeAsync(method, parameters, ct);
+    }
+
+    private static bool IsTransientError(string errorText) =>
+        errorText.Contains("UNAVAILABLE", StringComparison.OrdinalIgnoreCase)
+        || errorText.Contains("DEADLINE_EXCEEDED", StringComparison.OrdinalIgnoreCase)
+        || errorText.Contains("AbortError", StringComparison.OrdinalIgnoreCase);
 
     private static string Truncate(string s, int maxLen) =>
         s.Length <= maxLen ? s : s[..maxLen] + "…";
