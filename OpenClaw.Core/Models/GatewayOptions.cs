@@ -99,4 +99,18 @@ public sealed class GatewayOptions
     /// <see cref="GatewayConstants.ErrorCodes.NotPaired"/> 状态下的最大重试次数，0 表示无限重试
     /// </summary>
     public int MaxPairingRetries { get; set; }
+
+    // ─── Health Monitor ──────────────────────────────────
+
+    /// <summary>是否启用后台健康监控服务，默认关闭</summary>
+    public bool EnableHealthMonitor { get; set; }
+
+    /// <summary>主动健康探测的轮询间隔（秒）</summary>
+    public int HealthPollIntervalSeconds { get; set; } = 30;
+
+    /// <summary>tick 事件超时阈值（秒），超过此时间未收到 tick 则视为不健康</summary>
+    public int TickTimeoutSeconds { get; set; } = 60;
+
+    /// <summary>heartbeat 事件超时阈值（秒），超过此时间未收到 heartbeat 则视为不健康</summary>
+    public int HeartbeatTimeoutSeconds { get; set; } = 120;
 }

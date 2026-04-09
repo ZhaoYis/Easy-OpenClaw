@@ -25,6 +25,7 @@ builder.Services.PostConfigure<GatewayOptions>(opts =>
 });
 
 builder.Services.UseOpenClawEventSubscriber();
+builder.Services.UseOpenClawHealthMonitor();
 
 using var host = builder.Build();
 
@@ -32,6 +33,7 @@ using var host = builder.Build();
 
 var client = host.Services.GetRequiredService<GatewayClient>();
 var eventSubscriber = host.Services.GetRequiredService<GatewayEventSubscriber>();
+var healthMonitor = host.Services.GetRequiredService<HealthMonitorService>();
 
 using var cts = new CancellationTokenSource();
 
@@ -63,6 +65,14 @@ eventSubscriber.ChatTurnCompleted += () =>
 };
 eventSubscriber.ShutdownReceived += _ => { cts.Cancel(); };
 
+healthMonitor.HealthStateChanged += state =>
+{
+    if (state.IsHealthy)
+        Log.Urgent("INFO", ConsoleColor.Cyan, "[Health] 网关服务已恢复健康");
+    else
+        Log.Urgent("WARN", ConsoleColor.Yellow, $"[Health] 网关服务异常: {state.UnhealthyReason}");
+};
+
 eventSubscriber.RegisterAll();
 
 // ─── Connect (auto-approval retry) ──────────────────────
@@ -80,6 +90,10 @@ catch (Exception ex)
     Log.Error($"连接失败: {ex.Message}");
     return 1;
 }
+
+// ─── Start Hosted Services (HealthMonitor etc.) ─────────
+
+await host.StartAsync(cts.Token);
 
 // ─── Post-connect: Probe key methods & print summary ────
 
@@ -220,6 +234,8 @@ Console.ForegroundColor = ConsoleColor.DarkGray;
 Console.WriteLine("  再见!");
 Console.ResetColor();
 Console.WriteLine();
+
+await host.StopAsync();
 return 0;
 
 // ─── Helpers ────────────────────────────────────────────

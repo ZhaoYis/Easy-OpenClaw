@@ -67,6 +67,19 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// 注册 <see cref="HealthMonitorService"/> 后台健康监控服务。
+    /// 前置依赖 <see cref="UseOpenClawEventSubscriber"/>（被动事件监听需要 <see cref="GatewayEventSubscriber"/>）。
+    /// 通过 <see cref="GatewayOptions.EnableHealthMonitor"/> 控制是否真正启动轮询，
+    /// 但注册本身始终完成，以便应用层可通过 DI 获取 <see cref="HealthMonitorService"/> 实例。
+    /// </summary>
+    public static IServiceCollection UseOpenClawHealthMonitor(this IServiceCollection services)
+    {
+        services.AddSingleton<HealthMonitorService>();
+        services.AddHostedService(sp => sp.GetRequiredService<HealthMonitorService>());
+        return services;
+    }
+
     private static void RegisterCoreServices(IServiceCollection services)
     {
         services.AddSingleton<DeviceIdentity>(sp =>

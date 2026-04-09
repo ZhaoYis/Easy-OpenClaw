@@ -134,6 +134,30 @@ public static class Log
         }
     }
 
+    // ─── Urgent (bypass suppression) ──────────────────────
+
+    /// <summary>
+    /// 紧急日志：绕过聊天抑制机制，立即输出到控制台。
+    /// 仅用于健康状态变更等不可延迟的关键通知。
+    /// </summary>
+    public static void Urgent(string level, ConsoleColor color, string message)
+    {
+        lock (SyncRoot)
+        {
+            WriteImmediate(level, color, message);
+        }
+    }
+
+    /// <summary>
+    /// 诊断跟踪日志：输出到 <see cref="System.Diagnostics.Debug"/>，
+    /// 不写入主控制台，不受聊天抑制影响，仅在附加调试器时可见。
+    /// 适用于后台服务（如健康监控）的高频轮询日志。
+    /// </summary>
+    public static void Trace(string level, string message)
+    {
+        System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] [{level}] {message}");
+    }
+
     // ─── Internals ─────────────────────────────────────────
 
     private static void Write(string level, ConsoleColor color, string message)
