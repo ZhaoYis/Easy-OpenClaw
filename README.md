@@ -22,10 +22,13 @@ Easy-OpenClaw/
 │   ├── Models/                       # 协议模型与常量定义
 │   └── Logging/
 │       └── Log.cs                    # 彩色控制台日志（支持对话流式输出）
+├── OpenClaw.Core.SignalR/            # ASP.NET Core SignalR 桥接（Hub 基类、RPC、事件广播）
 ├── OpenClaw.Gateway.Client/          # 交互式 CLI 聊天客户端
 ├── OpenClaw.AutoApprove.Core/        # 自动审批逻辑（类库）
 ├── OpenClaw.AutoApprove.Client/     # 自动审批可执行程序
-└── tests/OpenClaw.Core.Tests/        # 单元测试
+└── tests/
+    ├── OpenClaw.Core.Tests/          # 核心库单元测试
+    └── OpenClaw.Core.SignalR.Tests/  # SignalR 桥接集成测试（Kestrel + HubConnection）
 ```
 
 ## 功能特性
@@ -39,6 +42,17 @@ Easy-OpenClaw/
 - **自动重连**：指数退避重连，`NOT_PAIRED` 自动轮询等待审批
 - **70+ RPC 方法**：覆盖 Health、Chat、TTS、Config、Agents、Sessions、Cron、Node、Device Pairing 等网关接口
 - **依赖注入**：`AddOpenClaw` 注册 `GatewayClient`，`UseOpenClawEventSubscriber` 注册事件订阅器
+
+### OpenClaw.Core.SignalR — SignalR 桥接
+
+- **`IOpenClawGatewayRpc`**：对 `GatewayClient` 的 RPC 与连接状态抽象，默认实现 `OpenClawGatewayRpc`
+- **`OpenClawGatewayHub`**（`[Authorize]` + JWT）/ **`OpenClawGatewayHubAllowAnonymous`**（开发用）/ **`OpenClawGatewayHubBase`**：Hub 方法 `invokeRpcAsync`、`getGatewayStateAsync`；连接后加入 `oc:user:{id}`、`oc:tier:{档位}`、`oc:system` 组；`AllowedRpcMethods` 白名单
+- **`AddOpenClawSignalRAuthentication`**：`JwtBearer` + WebSocket 下 query `access_token` 与 Header Bearer
+- **`IGatewayEventAudienceResolver`**：通过 **`GatewayEventAudienceResolveContext`** 将每条 `GatewayEvent` 解析为 `IClientProxy`（默认 **零广播** 防串消息）。推荐注册 **`SystemBroadcastGroupGatewayEventAudienceResolver`**（推送到建连时加入的 `oc:system`，与系统广播组一致）；可选 **`AllPresenceConnectionsGatewayEventAudienceResolver`**（按运营快照扇出全部连接，成本较高）；开发可注册 **`AllClientsGatewayEventAudienceResolver`**（全员，高风险）
+- **`IOpenClawSystemBroadcastSender<THub>`**：经 **`oc:system`** 组推送 **`systemBroadcast`**，与网关事件通道分离
+- **`OpenClawGatewayEventBroadcaster<THub>`**：按解析器定向推送网关事件
+- **`OpenClawGatewayConnectHostedService`**：配置 `EnableBackgroundConnect` 后在启动时执行 `ConnectWithRetryAsync`
+- **连接运营存储（插件式）**：`AddOpenClawSignalRGateway<THub>(...)` 返回构建器后须调用 **`UseMemoryConnectionPresence()`**（单机内存）、**`UseHybridConnectionPresence(...)`**（共享 `IDistributedCache` + `HybridCache`，可在回调里注册 Redis 等），或 **`UseCustomConnectionPresence` / `UseConnectionPresenceStore<T>`** 接入自定义 `IOpenClawSignalRConnectionPresenceStore`
 
 ### OpenClaw.Gateway.Client — 交互式客户端
 
@@ -141,6 +155,7 @@ dotnet run --project OpenClaw.AutoApprove.Client
 ```bash
 dotnet build Easy-OpenClaw.sln
 dotnet test tests/OpenClaw.Core.Tests/OpenClaw.Core.Tests.csproj
+dotnet test tests/OpenClaw.Core.SignalR.Tests/OpenClaw.Core.SignalR.Tests.csproj
 ```
 
 ## 作为 SDK 使用
@@ -181,6 +196,87 @@ var health = await client.HealthAsync();
 var models = await client.ModelsListAsync();
 var resp = await client.ChatAsync("你好！");
 ```
+
+### ASP.NET Core：通过 SignalR 暴露网关（JWT + 分组推送）
+
+引用 `OpenClaw.Core.SignalR`，典型移动端顺序：**`AddAuthorization` → `AddOpenClawSignalRAuthentication` → `AddSignalR` → `AddOpenClawSignalRGateway` → 连接存储 `Use…`**，并在管道中启用认证/授权；Hub 使用 **`RequireAuthorization()`**。
+
+```csharp
+using OpenClaw.Core.Extensions;
+using OpenClaw.Core.SignalR;
+
+builder.Services.AddOpenClaw(builder.Configuration.GetSection(OpenClaw.Core.Models.GatewayOptions.SectionName));
+builder.Services.AddAuthorization();
+builder.Services.AddOpenClawSignalRAuthentication();
+builder.Services.AddSignalR();
+builder.Services.AddOpenClawSignalRGateway<OpenClawGatewayHub>(
+        builder.Configuration.GetSection(OpenClawSignalROptions.SectionName))
+    .UseMemoryConnectionPresence();
+// 在 AddOpenClawSignalRGateway 之前注册可替换默认 Null；生产常见：AddSingleton<IGatewayEventAudienceResolver, SystemBroadcastGroupGatewayEventAudienceResolver>()
+
+// 多实例 / 生产可改用 Hybrid，并在回调中注册共享分布式缓存（示例为 Redis；请勿在回调内调用 AddHybridCache，由 UseHybridConnectionPresence 统一注册）：
+// builder.Services.AddOpenClawSignalRGateway<OpenClawGatewayHub>(...)
+//     .UseHybridConnectionPresence(services =>
+//     {
+//         services.AddStackExchangeRedisCache(options =>
+//         {
+//             options.Configuration = "localhost:6379";
+//         });
+//     });
+
+// …
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapHub<OpenClawGatewayHub>("/hubs/openclaw").RequireAuthorization();
+```
+
+**系统广播**（全体已认证在线用户，与网关事件分离）：
+
+```csharp
+var sender = app.Services.GetRequiredService<IOpenClawSystemBroadcastSender<OpenClawGatewayHub>>();
+await sender.SendAsync(new { kind = "notice", text = "..." });
+```
+
+**移动端连接**：WebSocket  negotiate 时在 URL 上携带 `?access_token=...`，或配合客户端 `AccessTokenProvider`；与 Header `Authorization: Bearer` 等价（由 `AddOpenClawSignalRAuthentication` 内 `OnMessageReceived` 处理）。
+
+配置示例（节名 `OpenClawSignalR`）：
+
+```json
+{
+  "OpenClawSignalR": {
+    "GatewayEventClientMethod": "GatewayEvent",
+    "SystemBroadcastClientMethod": "systemBroadcast",
+    "UserIdClaimType": "sub",
+    "TierClaimType": "tier",
+    "UserGroupPrefix": "oc:user:",
+    "TierGroupPrefix": "oc:tier:",
+    "SystemBroadcastGroupName": "oc:system",
+    "SignalRHubPathPrefix": "/hubs",
+    "GatewayEventBroadcastMode": "ResolverOnly",
+    "AllowedRpcMethods": [ "health", "chat.send" ],
+    "EventAllowlist": [ "agent", "chat" ],
+    "EnableBackgroundConnect": true,
+    "Jwt": {
+      "Authority": "https://your-idp",
+      "Audience": "your-api",
+      "RequireHttpsMetadata": true
+    }
+  }
+}
+```
+
+对称密钥（例如测试）可使用 `Jwt:SigningKeyBase64` + `Jwt:Issuer` + `Jwt:Audience`，由库写入 `TokenValidationParameters`。
+
+**`IGatewayEventAudienceResolver`**：`GatewayEvent` 本身通常**不含**收件人路由字段；**推荐**让受众与 Hub **建连时的授权与分组**一致，例如注册 **`SystemBroadcastGroupGatewayEventAudienceResolver`**（`context.Clients.Group(SystemBroadcastGroupName)`，与已加入 `oc:system` 的已认证连接一致），或与 **`OpenClawSystemBroadcastSender`** 相同的组语义。需要按连接 id 扇出时可注册 **`AllPresenceConnectionsGatewayEventAudienceResolver`**（解析器将 `RequiresConnectionSnapshotEnumeration` 设为 `true`，广播器会拉取 `IOpenClawSignalRConnectionPresenceStore` 快照填入上下文）。若业务仍能从 `Payload` 推断目标用户，可在自定义解析器中使用 `context.Event.Payload` 并返回 `context.Clients.Group(OpenClawSignalRGroupNames.FormatUserGroup(...))` 等。**禁止在不确定接收者时使用 `Clients.All`**（若确需全员网关事件，可显式注册 **`AllClientsGatewayEventAudienceResolver`** 并自担风险）。默认 **`NullGatewayEventAudienceResolver`** 不推送任何网关事件；未注册自定义解析器时客户端收不到网关推送（RPC 仍可用）。
+
+**开发环境**可使用 **`OpenClawGatewayHubAllowAnonymous`** 且 **`MapHub` 不加 `RequireAuthorization`**；此时不会加入用户/档位/系统组。集成测试曾用 **`AllClientsGatewayEventAudienceResolver`** 模拟旧版全员推送。
+
+**Claim 与组名**：库内对用户 id 依次尝试配置的 `UserIdClaimType`、**`ClaimTypes.NameIdentifier`**、字面 **`sub`**，以兼容 JWT 默认入站 Claim 映射。若仍异常，可在启动时执行 `JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear()` 后改用短名 Claim。
+
+生产环境请配置 CORS、**`AllowedRpcMethods`**，并自行实现受众解析以保证**消息不串**。
+
+**SignalR 客户端约定**：JSON 协议下服务端调用客户端方法名多为 **camelCase**（如 `gatewayEvent`、`systemBroadcast`、`getGatewayStateAsync`、`invokeRpcAsync`）。Hub 方法不向客户端暴露 `CancellationToken` 参数。
 
 ## 支持的 RPC 方法
 

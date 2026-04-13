@@ -1,0 +1,25 @@
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.AspNetCore.SignalR;
+
+namespace OpenClaw.Core.SignalR;
+
+/// <summary>
+/// 将网关事件推送到 <see cref="OpenClawSignalROptions.SystemBroadcastGroupName"/> 组；与
+/// <see cref="OpenClawGatewayHubBase"/> 建连时加入的组一致，受众由连接时的授权与分组决定，不依赖
+/// <see cref="GatewayEventAudienceResolveContext.Event"/> 中的用户字段。
+/// </summary>
+public sealed class SystemBroadcastGroupGatewayEventAudienceResolver : IGatewayEventAudienceResolver
+{
+    public bool TryResolveClients(GatewayEventAudienceResolveContext context, [NotNullWhen(true)] out IClientProxy? target)
+    {
+        var name = context.Options.SystemBroadcastGroupName;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            target = null;
+            return false;
+        }
+
+        target = context.Clients.Group(name);
+        return true;
+    }
+}
