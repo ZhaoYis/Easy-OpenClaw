@@ -26,9 +26,34 @@ internal sealed class FakeOpenClawGatewayRpc : IOpenClawGatewayRpc
     public IReadOnlyList<string> AvailableMethods { get; }
     public IReadOnlyList<string> AvailableEvents { get; }
 
-    public Task<GatewayResponse> InvokeAsync(string method, JsonElement? parameters, CancellationToken cancellationToken = default)
+    public Task<GatewayResponse> InvokeAsync(string method, JsonElement? parameters,
+        CancellationToken cancellationToken = default)
     {
         var payload = JsonSerializer.SerializeToElement(new { method, echo = true }, JsonDefaults.SerializerOptions);
+        return Task.FromResult(new GatewayResponse
+        {
+            Ok = true,
+            Id = "test-id",
+            Payload = payload,
+        });
+    }
+
+    public Task<GatewayResponse> InvokeAsync<T>(string method, T parameters, CancellationToken ct = default)
+    {
+        var payload = JsonSerializer.SerializeToElement(new { method, echo = true }, JsonDefaults.SerializerOptions);
+        return Task.FromResult(new GatewayResponse
+        {
+            Ok = true,
+            Id = "test-id",
+            Payload = payload,
+        });
+    }
+
+    public Task<GatewayResponse> ChatAsync(string userMessage, string? sessionKey = null,
+        CancellationToken ct = default)
+    {
+        var payload =
+            JsonSerializer.SerializeToElement(new { userMessage, echo = true }, JsonDefaults.SerializerOptions);
         return Task.FromResult(new GatewayResponse
         {
             Ok = true,

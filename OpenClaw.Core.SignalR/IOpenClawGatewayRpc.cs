@@ -20,5 +20,16 @@ public interface IOpenClawGatewayRpc
     /// <summary>
     /// 调用网关 RPC。<paramref name="parameters"/> 为 null 时发送空 JSON 对象 <c>{}</c>。
     /// </summary>
-    Task<GatewayResponse> InvokeAsync(string method, JsonElement? parameters, CancellationToken cancellationToken = default);
+    Task<GatewayResponse> InvokeAsync(string method, JsonElement? parameters, CancellationToken ct = default);
+
+    /// <summary>
+    /// 调用网关 RPC
+    /// </summary>
+    Task<GatewayResponse> InvokeAsync<T>(string method, T parameters, CancellationToken ct = default);
+
+    /// <summary>
+    /// 向网关发送对话消息
+    /// </summary>
+    /// <returns></returns>
+    Task<GatewayResponse> ChatAsync(string userMessage, string? sessionKey = null, CancellationToken ct = default);
 }

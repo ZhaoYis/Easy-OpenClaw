@@ -34,9 +34,6 @@ public abstract class OpenClawGatewayHubBase : Hub
     /// <summary>在加入默认组之后调用；返回额外要加入的组名（已规范化，可直接使用）。</summary>
     protected virtual IEnumerable<string> GetAdditionalConnectionGroups(OpenClawSignalRConnectionContext context) => [];
 
-    /// <summary>在 RPC 白名单校验之后、发往网关之前调用；可抛出 <see cref="HubException"/> 拒绝调用。</summary>
-    protected virtual ValueTask OnBeforeInvokeRpcAsync(string method, CancellationToken cancellationToken) => ValueTask.CompletedTask;
-
     /// <summary>
     /// 为 true 时拒绝未认证建连（默认）；匿名 Hub 应重写为 false。
     /// </summary>
@@ -106,11 +103,14 @@ public abstract class OpenClawGatewayHubBase : Hub
     /// 不含 <see cref="CancellationToken"/> 参数，以便 SignalR 客户端只需传入 <c>method</c> 与 <c>parameters</c>；
     /// 取消使用 <see cref="Hub.Context"/> 的 <see cref="HubCallerContext.ConnectionAborted"/>。
     /// </remarks>
-    public virtual async Task<GatewayResponse> InvokeRpcAsync(string method, JsonElement? parameters)
+    public virtual Task<GatewayResponse> InvokeRpcAsync(string method, JsonElement? parameters)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(method);
-        var cancellationToken = Context.ConnectionAborted;
 
+        if (!_rpc.IsConnected)
+            throw new HubException("Gateway is not connected.");
+
+        var cancellationToken = Context.ConnectionAborted;
         var allow = _options.Value.AllowedRpcMethods;
         if (allow is { Length: > 0 })
         {
@@ -124,12 +124,20 @@ public abstract class OpenClawGatewayHubBase : Hub
             }
         }
 
-        await OnBeforeInvokeRpcAsync(method, cancellationToken).ConfigureAwait(false);
+        return _rpc.InvokeAsync(method, parameters, cancellationToken);
+    }
+
+    /// <summary>
+    /// 向网关发送对话消息
+    /// </summary>
+    public virtual Task<GatewayResponse> ChatAsync(string userMessage, string? sessionKey = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userMessage);
 
         if (!_rpc.IsConnected)
             throw new HubException("Gateway is not connected.");
 
-        return await _rpc.InvokeAsync(method, parameters, cancellationToken).ConfigureAwait(false);
+        return _rpc.ChatAsync(userMessage, sessionKey, Context.ConnectionAborted);
     }
 
     /// <summary>返回当前网关连接摘要，供前端展示或探测能力列表。</summary>

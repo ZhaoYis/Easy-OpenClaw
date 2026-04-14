@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using OpenClaw.Core.Client;
 using OpenClaw.Core.Helpers;
 using OpenClaw.Core.Models;
@@ -26,12 +25,28 @@ public sealed class OpenClawGatewayRpc : IOpenClawGatewayRpc
 
     public IReadOnlyList<string> AvailableEvents => _client.AvailableEvents;
 
-    public Task<GatewayResponse> InvokeAsync(string method, JsonElement? parameters, CancellationToken cancellationToken = default)
+    public Task<GatewayResponse> InvokeAsync(string method, JsonElement? parameters, CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
         if (parameters is null)
-            return _client.SendRequestAsync(method, JsonSerializer.SerializeToElement(new { }, JsonDefaults.SerializerOptions),
-                cancellationToken);
+        {
+            JsonElement defaultParam = JsonSerializer.SerializeToElement(new { }, JsonDefaults.SerializerOptions);
+            return _client.SendRequestAsync(method, defaultParam, ct);
+        }
 
-        return _client.SendRequestAsync(method, parameters.Value, cancellationToken);
+        return _client.SendRequestAsync(method, parameters.Value, ct);
+    }
+
+    public Task<GatewayResponse> InvokeAsync<T>(string method, T parameters, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        return _client.SendRequestAsync<T>(method, parameters, ct);
+    }
+
+    public Task<GatewayResponse> ChatAsync(string userMessage, string? sessionKey = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userMessage);
+        return _client.ChatAsync(userMessage, sessionKey, ct);
     }
 }

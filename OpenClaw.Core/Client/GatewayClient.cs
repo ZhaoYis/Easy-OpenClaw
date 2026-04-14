@@ -334,7 +334,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// <param name="parameters">JSON 格式的请求参数</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>网关响应</returns>
-    internal async Task<GatewayResponse> SendRequestRawAsync(string method, JsonElement parameters, CancellationToken ct)
+    private async Task<GatewayResponse> SendRequestRawAsync(string method, JsonElement parameters, CancellationToken ct)
     {
         var (id, task) = _gatewayRequests.Register(_options.RequestTimeout);
 
@@ -369,7 +369,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// <param name="sessionKey">目标会话键，为 null 时自动选择默认会话</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>网关响应，表示消息是否成功入队处理</returns>
-    public Task<GatewayResponse> ChatAsync(string userMessage, string? sessionKey = null, CancellationToken ct = default)
+    public Task<GatewayResponse> ChatAsync(string userMessage, string? sessionKey = null,
+        CancellationToken ct = default)
     {
         var key = sessionKey
                   ?? _helloOk?.Snapshot?.SessionDefaults?.MainSessionKey
@@ -600,7 +601,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         foreach (var entry in tokens)
         {
-            Log.Debug($"  Bootstrap handoff token: role={entry.Role}, scopes=[{string.Join(", ", entry.Scopes ?? [])}]");
+            Log.Debug(
+                $"  Bootstrap handoff token: role={entry.Role}, scopes=[{string.Join(", ", entry.Scopes ?? [])}]");
         }
 
         var primary = tokens[0];
@@ -629,6 +631,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
             return host is "localhost" or "127.0.0.1" or "::1"
                    || host.StartsWith("[::1]", StringComparison.Ordinal);
         }
+
         return false;
     }
 
@@ -842,7 +845,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
             Role = _options.Role,
             Scopes = effectiveScopes,
             Auth = auth,
-            UserAgent = string.Format(GatewayConstants.Transport.UserAgentTemplate, _options.ClientVersion, RuntimeInformation.OSDescription),
+            UserAgent = string.Format(GatewayConstants.Transport.UserAgentTemplate, _options.ClientVersion,
+                RuntimeInformation.OSDescription),
             Device = new DeviceInfo
             {
                 Id = _device.DeviceId,
@@ -935,7 +939,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
         try
         {
             if (e.TryGetProperty("details", out var details))
-                return JsonSerializer.Deserialize<AuthErrorDetails>(details.GetRawText(), JsonDefaults.SerializerOptions);
+                return JsonSerializer.Deserialize<AuthErrorDetails>(details.GetRawText(),
+                    JsonDefaults.SerializerOptions);
 
             if (e.TryGetProperty("code", out _))
                 return JsonSerializer.Deserialize<AuthErrorDetails>(e.GetRawText(), JsonDefaults.SerializerOptions);

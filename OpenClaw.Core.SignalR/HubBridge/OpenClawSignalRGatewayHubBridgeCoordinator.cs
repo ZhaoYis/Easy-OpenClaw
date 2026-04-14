@@ -158,8 +158,7 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
         if (!_audienceResolver.TryResolveClients(resolveContext, out var target))
         {
             if (opts.LogUnresolvedGatewayEventAudience)
-                _logger.LogDebug("Gateway event {Event} skipped: audience resolver returned no target (seq={Seq})",
-                    evt.Event, evt.Seq);
+                _logger.LogDebug("Gateway event {Event} skipped: audience resolver returned no target (seq={Seq})", evt.Event, evt.Seq);
             return;
         }
 
