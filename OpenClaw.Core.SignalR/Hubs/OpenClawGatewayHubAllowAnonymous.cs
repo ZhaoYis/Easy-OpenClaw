@@ -15,8 +15,9 @@ public sealed class OpenClawGatewayHubAllowAnonymous : OpenClawGatewayHubBase
         IOpenClawGatewayRpc rpc,
         IOptions<OpenClawSignalROptions> options,
         IOpenClawSignalRConnectionPresenceStore presenceStore,
+        IOpenClawSignalRGatewayHubBridge hubBridge,
         ILoggerFactory loggerFactory)
-        : base(rpc, options, presenceStore, loggerFactory)
+        : base(rpc, options, presenceStore, hubBridge, loggerFactory)
     {
     }
 

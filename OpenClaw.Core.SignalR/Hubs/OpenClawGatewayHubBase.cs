@@ -14,17 +14,20 @@ public abstract class OpenClawGatewayHubBase : Hub
     private readonly IOpenClawGatewayRpc _rpc;
     private readonly IOptions<OpenClawSignalROptions> _options;
     private readonly IOpenClawSignalRConnectionPresenceStore _presenceStore;
+    private readonly IOpenClawSignalRGatewayHubBridge _hubBridge;
     private readonly ILogger _logger;
 
     protected OpenClawGatewayHubBase(
         IOpenClawGatewayRpc rpc,
         IOptions<OpenClawSignalROptions> options,
         IOpenClawSignalRConnectionPresenceStore presenceStore,
+        IOpenClawSignalRGatewayHubBridge hubBridge,
         ILoggerFactory loggerFactory)
     {
         _rpc = rpc;
         _options = options;
         _presenceStore = presenceStore;
+        _hubBridge = hubBridge;
         _logger = loggerFactory.CreateLogger(GetType());
     }
 
@@ -69,8 +72,13 @@ public abstract class OpenClawGatewayHubBase : Hub
             snapshotUserId,
             tier,
             DateTimeOffset.UtcNow,
-            groups.ToArray(),
+            groups,
             OpenClawSignalRPrincipalSnapshot.From(Context.User)), CancellationToken.None).ConfigureAwait(false);
+
+        await _hubBridge.OnHubConnectedAsync(new OpenClawSignalRGatewayHubBridgeContext(
+                Context.ConnectionId,
+                snapshotUserId),
+            Context.ConnectionAborted).ConfigureAwait(false);
 
         await base.OnConnectedAsync().ConfigureAwait(false);
     }
@@ -82,6 +90,12 @@ public abstract class OpenClawGatewayHubBase : Hub
             Context.ConnectionId,
             disconnectUserId,
             CancellationToken.None).ConfigureAwait(false);
+
+        await _hubBridge.OnHubDisconnectedAsync(new OpenClawSignalRGatewayHubBridgeContext(
+                Context.ConnectionId,
+                disconnectUserId),
+            CancellationToken.None).ConfigureAwait(false);
+
         await base.OnDisconnectedAsync(exception).ConfigureAwait(false);
     }
 

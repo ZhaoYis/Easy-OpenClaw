@@ -198,6 +198,36 @@ public sealed partial class GatewayClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// 主动关闭当前 WebSocket 并取消生命周期令牌，使 <see cref="State"/> 回到 Disconnected；
+    /// 不将客户端标记为已释放，可再次调用 <see cref="ConnectAsync"/> / <see cref="ConnectWithRetryAsync"/>。
+    /// </summary>
+    public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    {
+        _ = cancellationToken;
+
+        var cts = _lifetimeCts;
+        _lifetimeCts = null;
+        if (cts is not null)
+        {
+            try
+            {
+                await cts.CancelAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                cts.Dispose();
+            }
+        }
+
+        _state = ConnectionState.Disconnected;
+
+        var ws = _ws;
+        _ws = null;
+        if (ws is not null)
+            await ws.DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// 带 NOT_PAIRED 自动重试的连接方法。
     /// 当设备未配对时，按指数退避轮询重连，直到外部审批服务完成批准。
     /// </summary>

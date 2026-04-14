@@ -16,9 +16,9 @@ public sealed class OpenClawSignalROperationServiceTests
         try
         {
             var ops = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
-            Assert.Equal(1, await ops.GetOnlineConnectionCountAsync());
+            await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(ops, 1);
 
-            var list = await ops.GetOnlineConnectionsAsync();
+            var list = await SignalRTestPresencePoll.WaitForSnapshotsNonEmptyAsync(ops);
             Assert.Single(list);
             var snap = list[0];
             Assert.Equal("ops-user", snap.UserId);
@@ -61,7 +61,7 @@ public sealed class OpenClawSignalROperationServiceTests
         connection.On<string>("opNotify", msg => tcs.TrySetResult(msg));
 
         var ops = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
-        var connId = (await ops.GetOnlineConnectionsAsync())[0].ConnectionId;
+        var connId = (await SignalRTestPresencePoll.WaitForSnapshotsNonEmptyAsync(ops))[0].ConnectionId;
         await ops.SendToConnectionAsync(connId, "opNotify", ["hello-ops"]);
 
         var msg = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(3));
@@ -83,6 +83,7 @@ public sealed class OpenClawSignalROperationServiceTests
         c2.On<string>("opNotify", msg => tcs2.TrySetResult(msg));
 
         var ops = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
+        await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(ops, 2);
         await ops.SendToUserAsync("multi-user", "opNotify", ["broadcast"]);
 
         Assert.Equal("broadcast", await tcs1.Task.WaitAsync(TimeSpan.FromSeconds(3)));
@@ -97,8 +98,8 @@ public sealed class OpenClawSignalROperationServiceTests
         await using var connection = await ConnectAnonymousAsync(host.BaseUri);
 
         var ops = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHubAllowAnonymous>>();
-        Assert.Equal(1, await ops.GetOnlineConnectionCountAsync());
-        var snap = (await ops.GetOnlineConnectionsAsync())[0];
+        await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(ops, 1);
+        var snap = (await SignalRTestPresencePoll.WaitForSnapshotsNonEmptyAsync(ops))[0];
         Assert.Null(snap.UserId);
         Assert.NotNull(snap.Principal);
         Assert.False(snap.Principal!.IsAuthenticated);
@@ -137,6 +138,7 @@ public sealed class OpenClawSignalROperationServiceTests
         connection.On<string>("opNotify", msg => tcs.TrySetResult(msg));
 
         var ops = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
+        await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(ops, 1);
         var group = ops.FormatUserGroupName("group-target");
         await ops.SendToGroupAsync(group, "opNotify", ["via-group"]);
 

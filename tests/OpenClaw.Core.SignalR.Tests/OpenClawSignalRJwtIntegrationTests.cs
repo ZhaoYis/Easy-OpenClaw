@@ -73,18 +73,40 @@ public sealed class OpenClawSignalRJwtIntegrationTests
         var tokenB = TestJwtTokens.CreateToken("user-b", "enterprise");
 
         await using var connA = await ConnectAuthorizedAsync(host.BaseUri, tokenA);
-        await using var connB = await ConnectAuthorizedAsync(host.BaseUri, tokenB);
 
-        var tcsA = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var tcsB = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        connA.On<object>("systemBroadcast", o => tcsA.TrySetResult(o));
-        connB.On<object>("systemBroadcast", o => tcsB.TrySetResult(o));
+        var ops = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
+        await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(ops, 1);
+
+        await using var connB = await ConnectAuthorizedAsync(host.BaseUri, tokenB);
+        await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(ops, 2);
+
+        var snapshots = await ops.GetOnlineConnectionsAsync();
+        Assert.Equal(2, snapshots.Count);
+        Assert.All(snapshots, s => Assert.Contains("oc:system", s.SignalRGroups));
+
+        // 勿用 On<object>：System.Text.Json 对匿名对象载荷往往无法反序列化为 object，回调不会触发导致超时。
+        var tcsA = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcsB = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        connA.On<JsonElement>("systemBroadcast", el =>
+        {
+            tcsA.TrySetResult(el);
+            return Task.CompletedTask;
+        });
+        connB.On<JsonElement>("systemBroadcast", el =>
+        {
+            tcsB.TrySetResult(el);
+            return Task.CompletedTask;
+        });
 
         var sender = host.App.Services.GetRequiredService<IOpenClawSystemBroadcastSender<OpenClawGatewayHub>>();
         await sender.SendAsync(new { kind = "maintenance", message = "hello" });
 
-        await tcsA.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        await tcsB.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var payloadA = await tcsA.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var payloadB = await tcsB.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal("maintenance", payloadA.GetProperty("kind").GetString());
+        Assert.Equal("hello", payloadA.GetProperty("message").GetString());
+        Assert.Equal("maintenance", payloadB.GetProperty("kind").GetString());
+        Assert.Equal("hello", payloadB.GetProperty("message").GetString());
     }
 
     private static async Task<HubConnection> ConnectAuthorizedAsync(Uri baseUri, string jwt)

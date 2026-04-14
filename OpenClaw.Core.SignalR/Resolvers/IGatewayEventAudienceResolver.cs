@@ -9,7 +9,7 @@ namespace OpenClaw.Core.SignalR;
 public interface IGatewayEventAudienceResolver
 {
     /// <summary>
-    /// 为 true 时 <see cref="OpenClawGatewayEventBroadcaster{THub}"/> 在调用前拉取
+    /// 为 true 时 <see cref="OpenClawSignalRGatewayHubBridgeCoordinator{THub}"/> 在调用前拉取
     /// <see cref="IOpenClawSignalRConnectionPresenceStore"/> 快照并填入
     /// <see cref="GatewayEventAudienceResolveContext.ConnectionSnapshots"/>（有 O(n) 成本，Hybrid 下可能触达分布式索引）。
     /// </summary>

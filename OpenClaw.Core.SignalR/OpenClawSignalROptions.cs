@@ -24,7 +24,10 @@ public sealed class OpenClawSignalROptions
     /// <summary>若非空，仅向客户端转发列表中的网关事件名；为空表示转发全部（仍受受众解析器约束）。</summary>
     public string[]? EventAllowlist { get; set; }
 
-    /// <summary>为 true 时注册后台服务，在应用启动时调用 <see cref="OpenClaw.Core.Client.GatewayClient.ConnectWithRetryAsync"/>。</summary>
+    /// <summary>
+    /// 为 true 时，在<strong>首个</strong> SignalR 客户端完成建连后调用 <see cref="OpenClaw.Core.Client.GatewayClient.ConnectWithRetryAsync"/>；
+    /// 最后一个客户端断开后断开网关传输。为 false 时仅注册网关事件订阅（便于测试或与假 RPC 并存），不主动建连。
+    /// </summary>
     public bool EnableBackgroundConnect { get; set; }
 
     /// <summary>

@@ -8,5 +8,5 @@ public sealed record OpenClawSignalRConnectionSnapshot(
     string? UserId,
     string? Tier,
     DateTimeOffset ConnectedAtUtc,
-    string[] SignalRGroups,
+    IReadOnlyList<string> SignalRGroups,
     OpenClawSignalRPrincipalSnapshot? Principal);

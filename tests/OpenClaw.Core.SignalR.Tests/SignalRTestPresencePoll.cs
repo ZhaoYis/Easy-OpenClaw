@@ -59,4 +59,25 @@ internal static class SignalRTestPresencePoll
 
         return await ops.GetOnlineConnectionsAsync().ConfigureAwait(false);
     }
+
+    /// <summary>轮询 HTTP JSON 数组端点直至非空（缓解 Hub 建连与运营快照写入的竞态）。</summary>
+    public static async Task<List<T>> WaitForNonEmptyJsonListAsync<T>(
+        HttpClient http,
+        string relativeUri,
+        int timeoutMs = 5000)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            var list = await http.GetFromJsonAsync<List<T>>(relativeUri).ConfigureAwait(false);
+            if (list is { Count: > 0 })
+                return list;
+            await Task.Delay(50).ConfigureAwait(false);
+        }
+
+        var final = await http.GetFromJsonAsync<List<T>>(relativeUri).ConfigureAwait(false);
+        Assert.NotNull(final);
+        Assert.True(final!.Count > 0, $"Expected non-empty JSON list from {relativeUri} within {timeoutMs}ms");
+        return final;
+    }
 }

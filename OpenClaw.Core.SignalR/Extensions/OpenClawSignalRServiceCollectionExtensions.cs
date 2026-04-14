@@ -15,8 +15,7 @@ public static class OpenClawSignalRServiceCollectionExtensions
     /// <summary>
     /// 注册 <see cref="IOpenClawGatewayRpc"/>、<see cref="IGatewayEventAudienceResolver"/>（若尚未注册）、
     /// <see cref="IUserIdProvider"/>、<see cref="IOpenClawSignalROperationService{THub}"/>、
-    /// <see cref="IOpenClawSystemBroadcastSender{THub}"/>、<see cref="OpenClawGatewayEventBroadcaster{THub}"/>、
-    /// <see cref="OpenClawGatewayConnectHostedService"/>。
+    /// <see cref="IOpenClawSystemBroadcastSender{THub}"/>、<see cref="IOpenClawSignalRGatewayHubBridge"/>（Hub 建连后挂接网关与事件推送）。
     /// </summary>
     /// <returns>
     /// 构建器；须继续调用 <see cref="OpenClawSignalRGatewayBuilder.UseMemoryStore"/>、
@@ -49,8 +48,9 @@ public static class OpenClawSignalRServiceCollectionExtensions
         services.TryAddSingleton<IUserIdProvider, OpenClawSignalRUserIdProvider>();
         services.AddSingleton<IOpenClawSignalROperationService<THub>, OpenClawSignalROperationService<THub>>();
         services.AddSingleton<IOpenClawSystemBroadcastSender<THub>, OpenClawSystemBroadcastSender<THub>>();
-        services.AddHostedService<OpenClawGatewayConnectHostedService>();
-        services.AddHostedService<OpenClawGatewayEventBroadcaster<THub>>();
+        services.AddSingleton<OpenClawSignalRGatewayHubBridgeCoordinator<THub>>();
+        services.AddSingleton<IOpenClawSignalRGatewayHubBridge>(static sp =>
+            sp.GetRequiredService<OpenClawSignalRGatewayHubBridgeCoordinator<THub>>());
         return new OpenClawSignalRGatewayBuilder(services);
     }
 }

@@ -22,10 +22,16 @@ public sealed class OpenClawSignalROperationApiIntegrationTests
         var hub = await ConnectAuthorizedAsync(host.BaseUri, TestJwtTokens.CreateToken("http-count-user", "guest"));
         try
         {
+            await SignalRTestPresencePoll.AssertHttpConnectionCountEventuallyAsync(
+                http,
+                $"{OperationsBase}/connections/count",
+                1);
+
             var count = await http.GetFromJsonAsync<int>($"{OperationsBase}/connections/count");
             Assert.Equal(1, count);
 
             var svc = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
+            await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(svc, 1);
             Assert.Equal(count, await svc.GetOnlineConnectionCountAsync());
 
             await hub.StopAsync();
@@ -54,7 +60,7 @@ public sealed class OpenClawSignalROperationApiIntegrationTests
             hub.On<string>("opNotify", msg => tcs.TrySetResult(msg));
 
             var ops = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
-            var connectionId = (await ops.GetOnlineConnectionsAsync())[0].ConnectionId;
+            var connectionId = (await SignalRTestPresencePoll.WaitForSnapshotsNonEmptyAsync(ops))[0].ConnectionId;
 
             using var http = CreateHttpClient(host.BaseUri);
             var response = await http.PostAsJsonAsync(
@@ -83,9 +89,10 @@ public sealed class OpenClawSignalROperationApiIntegrationTests
         try
         {
             using var http = CreateHttpClient(host.BaseUri, token);
-            var fromMe = await http.GetFromJsonAsync<List<OpenClawSignalRConnectionSnapshot>>($"{OperationsBase}/connections/me");
-            Assert.NotNull(fromMe);
-            Assert.Single(fromMe!);
+            var fromMe = await SignalRTestPresencePoll.WaitForNonEmptyJsonListAsync<OpenClawSignalRConnectionSnapshot>(
+                http,
+                $"{OperationsBase}/connections/me");
+            Assert.Single(fromMe);
             Assert.Equal("me-api-user", fromMe[0].UserId);
             Assert.NotNull(fromMe[0].Principal);
         }
@@ -107,6 +114,9 @@ public sealed class OpenClawSignalROperationApiIntegrationTests
         {
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             hub.On<string>("opNotify", msg => tcs.TrySetResult(msg));
+
+            var svcProbe = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
+            await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(svcProbe, 1);
 
             using var http = CreateHttpClient(host.BaseUri, token);
             var response = await http.PostAsJsonAsync(
@@ -150,12 +160,14 @@ public sealed class OpenClawSignalROperationApiIntegrationTests
         try
         {
             using var http = CreateHttpClient(host.BaseUri);
-            var fromHttp = await http.GetFromJsonAsync<List<string>>($"{OperationsBase}/users/distinct");
-            Assert.NotNull(fromHttp);
-            Assert.Single(fromHttp!);
+            var fromHttp = await SignalRTestPresencePoll.WaitForNonEmptyJsonListAsync<string>(
+                http,
+                $"{OperationsBase}/users/distinct");
+            Assert.Single(fromHttp);
             Assert.Equal("distinct-api-user", fromHttp[0]);
 
             var svc = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
+            await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(svc, 1);
             var fromSvc = await svc.GetDistinctOnlineUserIdsAsync();
             Assert.Equal(fromHttp, fromSvc);
         }
@@ -194,6 +206,9 @@ public sealed class OpenClawSignalROperationApiIntegrationTests
         {
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             hub.On<string>("opNotify", msg => tcs.TrySetResult(msg));
+
+            var svcProbe = host.App.Services.GetRequiredService<IOpenClawSignalROperationService<OpenClawGatewayHub>>();
+            await SignalRTestPresencePoll.AssertOnlineCountEventuallyAsync(svcProbe, 1);
 
             using var http = CreateHttpClient(host.BaseUri);
             var response = await http.PostAsJsonAsync(
