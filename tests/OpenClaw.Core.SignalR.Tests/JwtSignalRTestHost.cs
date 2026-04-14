@@ -45,10 +45,9 @@ internal sealed class JwtSignalRTestHost : IAsyncDisposable
                 o.TierClaimType = "tier";
                 configureSignalR?.Invoke(o);
             })
-            .UseMemoryConnectionPresence();
+            .UseMemoryStore();
 
-        builder.Services.AddControllers()
-            .AddApplicationPart(typeof(TestOpenClawOpsController).Assembly);
+        builder.Services.AddControllers().AddApplicationPart(typeof(TestOpenClawOpsController).Assembly);
 
         var app = builder.Build();
         app.UseAuthentication();

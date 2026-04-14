@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using OpenClaw.Core.SignalR;
@@ -71,8 +73,65 @@ public sealed class OpenClawSignalROperationApiIntegrationTests
         }
     }
 
-    private static HttpClient CreateHttpClient(Uri baseUri) =>
-        new() { BaseAddress = baseUri };
+    [Fact]
+    public async Task Get_connections_me_with_bearer_returns_current_user_snapshot()
+    {
+        await using var host = await JwtSignalRTestHost.StartAsync();
+
+        var token = TestJwtTokens.CreateToken("me-api-user", "guest");
+        var hub = await ConnectAuthorizedAsync(host.BaseUri, token);
+        try
+        {
+            using var http = CreateHttpClient(host.BaseUri, token);
+            var fromMe = await http.GetFromJsonAsync<List<OpenClawSignalRConnectionSnapshot>>($"{OperationsBase}/connections/me");
+            Assert.NotNull(fromMe);
+            Assert.Single(fromMe!);
+            Assert.Equal("me-api-user", fromMe[0].UserId);
+            Assert.NotNull(fromMe[0].Principal);
+        }
+        finally
+        {
+            await hub.StopAsync();
+            await hub.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Post_send_me_delivers_json_args_to_client()
+    {
+        await using var host = await JwtSignalRTestHost.StartAsync();
+
+        var token = TestJwtTokens.CreateToken("send-me-user", "guest");
+        var hub = await ConnectAuthorizedAsync(host.BaseUri, token);
+        try
+        {
+            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            hub.On<string>("opNotify", msg => tcs.TrySetResult(msg));
+
+            using var http = CreateHttpClient(host.BaseUri, token);
+            var response = await http.PostAsJsonAsync(
+                $"{OperationsBase}/send/me",
+                new OpenClawSignalRSendToCurrentUserRequest(
+                    "opNotify",
+                    [JsonSerializer.SerializeToElement("from-send-me")]));
+
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            Assert.Equal("from-send-me", await tcs.Task.WaitAsync(TimeSpan.FromSeconds(3)));
+        }
+        finally
+        {
+            await hub.StopAsync();
+            await hub.DisposeAsync();
+        }
+    }
+
+    private static HttpClient CreateHttpClient(Uri baseUri, string? bearerToken = null)
+    {
+        var http = new HttpClient { BaseAddress = baseUri };
+        if (!string.IsNullOrEmpty(bearerToken))
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        return http;
+    }
 
     private static async Task<HubConnection> ConnectAuthorizedAsync(Uri baseUri, string jwt)
     {

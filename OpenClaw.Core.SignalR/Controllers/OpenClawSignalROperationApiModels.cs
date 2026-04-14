@@ -2,6 +2,11 @@ using System.Text.Json;
 
 namespace OpenClaw.Core.SignalR;
 
+/// <summary>POST <c>send/me</c> 请求体（用户身份来自 <c>HttpContext.User</c>）。</summary>
+public sealed record OpenClawSignalRSendToCurrentUserRequest(
+    string HubMethod,
+    JsonElement[]? Args = null);
+
 /// <summary>POST <c>send/user</c> 请求体。</summary>
 public sealed record OpenClawSignalRSendToUserRequest(
     string UserId,

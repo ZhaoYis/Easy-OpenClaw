@@ -22,65 +22,65 @@ public sealed class OpenClawSignalRDistributedConnectionIdIndexTests
     }
 
     [Fact]
-    public async Task GetAllIdsAsync_empty_when_no_data()
+    public async Task GetAllIndexTokensAsync_empty_when_no_data()
     {
         var (index, _) = CreateIndex();
-        var ids = await index.GetAllIdsAsync();
-        Assert.Empty(ids);
+        var tokens = await index.GetAllIndexTokensAsync();
+        Assert.Empty(tokens);
     }
 
     [Fact]
-    public async Task AddAsync_and_GetAllIdsAsync_roundtrip()
+    public async Task AddAsync_and_GetAllIndexTokensAsync_roundtrip()
     {
         var (index, _) = CreateIndex();
-        await index.AddAsync("c1");
-        await index.AddAsync("c2");
-        var ids = await index.GetAllIdsAsync();
-        Assert.Equal(2, ids.Count);
-        Assert.Contains("c1", ids);
-        Assert.Contains("c2", ids);
+        await index.AddAsync("user|c1");
+        await index.AddAsync("user|c2");
+        var tokens = await index.GetAllIndexTokensAsync();
+        Assert.Equal(2, tokens.Count);
+        Assert.Contains("user|c1", tokens);
+        Assert.Contains("user|c2", tokens);
     }
 
     [Fact]
     public async Task AddAsync_duplicate_is_idempotent()
     {
         var (index, _) = CreateIndex();
-        await index.AddAsync("c1");
-        await index.AddAsync("c1");
-        var ids = await index.GetAllIdsAsync();
-        Assert.Single(ids);
-        Assert.Equal("c1", ids[0]);
+        await index.AddAsync("user|c1");
+        await index.AddAsync("user|c1");
+        var tokens = await index.GetAllIndexTokensAsync();
+        Assert.Single(tokens);
+        Assert.Equal("user|c1", tokens[0]);
     }
 
     [Fact]
     public async Task RemoveAsync_last_entry_yields_empty_list()
     {
         var (index, _) = CreateIndex();
-        await index.AddAsync("only");
-        await index.RemoveAsync("only");
-        var ids = await index.GetAllIdsAsync();
-        Assert.Empty(ids);
+        await index.AddAsync("u|only");
+        await index.RemoveAsync("u|only");
+        var tokens = await index.GetAllIndexTokensAsync();
+        Assert.Empty(tokens);
     }
 
     [Fact]
-    public async Task RemoveAsync_missing_id_is_noop()
+    public async Task RemoveAsync_missing_token_is_noop()
     {
         var (index, _) = CreateIndex();
-        await index.AddAsync("a");
-        await index.RemoveAsync("ghost");
-        var ids = await index.GetAllIdsAsync();
-        Assert.Single(ids);
+        await index.AddAsync("u|a");
+        await index.RemoveAsync("u|ghost");
+        var tokens = await index.GetAllIndexTokensAsync();
+        Assert.Single(tokens);
     }
 
     [Fact]
     public async Task RemoveAsync_one_of_many_leaves_others()
     {
         var (index, _) = CreateIndex();
-        await index.AddAsync("a");
-        await index.AddAsync("b");
-        await index.RemoveAsync("a");
-        var ids = await index.GetAllIdsAsync();
-        Assert.Single(ids);
-        Assert.Equal("b", ids[0]);
+        await index.AddAsync("u|a");
+        await index.AddAsync("u|b");
+        await index.RemoveAsync("u|a");
+        var tokens = await index.GetAllIndexTokensAsync();
+        Assert.Single(tokens);
+        Assert.Equal("u|b", tokens[0]);
     }
 }

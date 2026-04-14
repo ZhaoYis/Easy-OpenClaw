@@ -45,7 +45,7 @@ internal sealed class SignalRTestHost : IAsyncDisposable
                 o.EnableBackgroundConnect = false;
                 configureSignalR?.Invoke(o);
             })
-            .UseMemoryConnectionPresence();
+            .UseMemoryStore();
 
         var app = builder.Build();
         app.MapHub<OpenClawGatewayHubAllowAnonymous>("/hubs/openclaw");

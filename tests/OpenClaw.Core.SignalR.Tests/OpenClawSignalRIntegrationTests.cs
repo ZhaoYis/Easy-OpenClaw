@@ -185,7 +185,7 @@ public sealed class OpenClawSignalRIntegrationTests
 
             builder.Services.AddOpenClawSignalRGateway<OpenClawGatewayHubAllowAnonymous>(configure: o =>
                     o.EnableBackgroundConnect = false)
-                .UseMemoryConnectionPresence();
+                .UseMemoryStore();
 
             var app = builder.Build();
             app.MapHub<OpenClawGatewayHubAllowAnonymous>("/hubs/openclaw");

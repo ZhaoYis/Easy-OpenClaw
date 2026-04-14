@@ -52,7 +52,8 @@ Easy-OpenClaw/
 - **`IOpenClawSystemBroadcastSender<THub>`**：经 **`oc:system`** 组推送 **`systemBroadcast`**，与网关事件通道分离
 - **`OpenClawGatewayEventBroadcaster<THub>`**：按解析器定向推送网关事件
 - **`OpenClawGatewayConnectHostedService`**：配置 `EnableBackgroundConnect` 后在启动时执行 `ConnectWithRetryAsync`
-- **连接运营存储（插件式）**：`AddOpenClawSignalRGateway<THub>(...)` 返回构建器后须调用 **`UseMemoryConnectionPresence()`**（单机内存）、**`UseHybridConnectionPresence(...)`**（共享 `IDistributedCache` + `HybridCache`，可在回调里注册 Redis 等），或 **`UseCustomConnectionPresence` / `UseConnectionPresenceStore<T>`** 接入自定义 `IOpenClawSignalRConnectionPresenceStore`
+- **连接运营存储（插件式）**：`AddOpenClawSignalRGateway<THub>(...)` 返回构建器后须调用 **`UseMemoryConnectionPresence()`**、**`UseHybridConnectionPresence(...)`** 或自定义 **`IOpenClawSignalRConnectionPresenceStore`**。内置实现中，单连接载荷键为 **`ConnectionPresencePayloadKeyPrefix` + 规范化后的用户 id 段 + `:` + `connectionId`**（匿名连接使用 **`ConnectionPresenceAnonymousKeySegment`**，默认 `anon`）；分布式索引（**`ConnectionPresenceIndexKey`**）存 JSON 数组，元素为 **`userKeySegment|connectionId`**。快照 **`OpenClawSignalRConnectionSnapshot`** 含可序列化的 **`Principal`**（建连时 `Context.User` 的 Claim 副本，供 Hybrid 与后续逻辑使用）。断开时须调用 **`RemoveAsync(connectionId, presenceUserId)`**，`presenceUserId` 与注册时 **`UserId`** 一致（匿名传 `null`）。升级后若索引仍为旧版「纯 connectionId」列表，请清空分布式键或更换 **`ConnectionPresenceIndexKey`**。
+- **`IOpenClawSignalROperationService` / `OpenClawSignalROperationControllerBase`**：REST 查询在线连接与 `send/user|connection|group`；**`GET .../connections/me`** 与 **`POST .../send/me`** 带 **`[Authorize]`**，根据 **`HttpContext.User`** 解析用户 id 后读取运营存储中的连接并下发（与 **`SendToUserAsync`** 的 `IUserIdProvider` 路径互为补充）。
 
 ### OpenClaw.Gateway.Client — 交互式客户端
 
@@ -252,6 +253,7 @@ await sender.SendAsync(new { kind = "notice", text = "..." });
     "UserGroupPrefix": "oc:user:",
     "TierGroupPrefix": "oc:tier:",
     "SystemBroadcastGroupName": "oc:system",
+    "ConnectionPresenceAnonymousKeySegment": "anon",
     "SignalRHubPathPrefix": "/hubs",
     "GatewayEventBroadcastMode": "ResolverOnly",
     "AllowedRpcMethods": [ "health", "chat.send" ],

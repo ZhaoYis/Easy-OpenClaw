@@ -5,11 +5,14 @@ using Microsoft.Extensions.Options;
 namespace OpenClaw.Core.SignalR;
 
 /// <summary>
-/// 使用 <see cref="IDistributedCache"/> 保存连接 id 列表（JSON），供内置 Hybrid 连接存储等多实例场景枚举连接。
+/// 使用 <see cref="IDistributedCache"/> 保存索引 token 列表（JSON），每项为 <c>userKeySegment|connectionId</c>，供 Hybrid 连接存储枚举。
 /// </summary>
 public sealed class OpenClawSignalRDistributedConnectionIdIndex
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     private readonly IDistributedCache _distributed;
     private readonly IOptions<OpenClawSignalROptions> _options;
@@ -22,21 +25,21 @@ public sealed class OpenClawSignalRDistributedConnectionIdIndex
         _options = options;
     }
 
-    public async Task<IReadOnlyList<string>> GetAllIdsAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> GetAllIndexTokensAsync(CancellationToken cancellationToken = default)
     {
         var bytes = await _distributed.GetAsync(IndexKey, cancellationToken).ConfigureAwait(false);
         if (bytes is null || bytes.Length == 0)
-            return Array.Empty<string>();
+            return [];
 
-        var ids = JsonSerializer.Deserialize<string[]>(bytes, JsonOptions);
-        return ids is { Length: > 0 } ? ids : Array.Empty<string>();
+        var tokens = JsonSerializer.Deserialize<string[]>(bytes, JsonOptions);
+        return tokens is { Length: > 0 } ? tokens : [];
     }
 
-    public async Task AddAsync(string connectionId, CancellationToken cancellationToken = default)
+    public async Task AddAsync(string indexToken, CancellationToken cancellationToken = default)
     {
         var bytes = await _distributed.GetAsync(IndexKey, cancellationToken).ConfigureAwait(false);
         var set = ToSet(bytes);
-        if (!set.Add(connectionId))
+        if (!set.Add(indexToken))
             return;
 
         var next = JsonSerializer.SerializeToUtf8Bytes(set.ToArray(), JsonOptions);
@@ -44,11 +47,11 @@ public sealed class OpenClawSignalRDistributedConnectionIdIndex
             .ConfigureAwait(false);
     }
 
-    public async Task RemoveAsync(string connectionId, CancellationToken cancellationToken = default)
+    public async Task RemoveAsync(string indexToken, CancellationToken cancellationToken = default)
     {
         var bytes = await _distributed.GetAsync(IndexKey, cancellationToken).ConfigureAwait(false);
         var set = ToSet(bytes);
-        if (!set.Remove(connectionId))
+        if (!set.Remove(indexToken))
             return;
 
         if (set.Count == 0)

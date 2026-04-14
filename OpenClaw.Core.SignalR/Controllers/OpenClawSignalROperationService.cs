@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 
@@ -55,7 +56,20 @@ public sealed class OpenClawSignalROperationService<THub> : IOpenClawSignalROper
         var snapshots = await _presenceStore.GetSnapshotsAsync(cancellationToken).ConfigureAwait(false);
         return snapshots
             .Where(s => string.Equals(s.UserId, userId, StringComparison.Ordinal))
-            .ToArray();
+            .ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<OpenClawSignalRConnectionSnapshot>> GetConnectionsForCurrentUserAsync(
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        var userId = OpenClawSignalRClaimResolution.GetUserId(user, _options.Value.UserIdClaimType);
+        if (string.IsNullOrWhiteSpace(userId))
+            return [];
+
+        return await GetConnectionsForUserAsync(userId, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -90,8 +104,22 @@ public sealed class OpenClawSignalROperationService<THub> : IOpenClawSignalROper
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
         ArgumentException.ThrowIfNullOrWhiteSpace(hubMethod);
-        return _hubContext.Clients.User(userId)
-            .SendCoreAsync(hubMethod, args ?? [], cancellationToken);
+        return _hubContext.Clients.User(userId).SendCoreAsync(hubMethod, args ?? [], cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task SendToCurrentUserConnectionsAsync(ClaimsPrincipal user, string hubMethod, object?[]? args = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hubMethod);
+        var connections = await GetConnectionsForCurrentUserAsync(user, cancellationToken).ConfigureAwait(false);
+        if (connections.Count == 0)
+            return;
+
+        var ids = connections.Select(static s => s.ConnectionId).ToArray();
+        await _hubContext.Clients.Clients(ids).SendCoreAsync(hubMethod, args ?? [], cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -100,8 +128,7 @@ public sealed class OpenClawSignalROperationService<THub> : IOpenClawSignalROper
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(hubMethod);
-        return _hubContext.Clients.Client(connectionId)
-            .SendCoreAsync(hubMethod, args ?? [], cancellationToken);
+        return _hubContext.Clients.Client(connectionId).SendCoreAsync(hubMethod, args ?? [], cancellationToken);
     }
 
     /// <inheritdoc />
@@ -110,7 +137,6 @@ public sealed class OpenClawSignalROperationService<THub> : IOpenClawSignalROper
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(groupName);
         ArgumentException.ThrowIfNullOrWhiteSpace(hubMethod);
-        return _hubContext.Clients.Group(groupName)
-            .SendCoreAsync(hubMethod, args ?? [], cancellationToken);
+        return _hubContext.Clients.Group(groupName).SendCoreAsync(hubMethod, args ?? [], cancellationToken);
     }
 }

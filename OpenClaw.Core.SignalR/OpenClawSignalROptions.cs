@@ -59,6 +59,12 @@ public sealed class OpenClawSignalROptions
     /// <summary>连接载荷缓存键前缀（内置 Memory / Hybrid 存储共用逻辑键）。</summary>
     public string ConnectionPresencePayloadKeyPrefix { get; set; } = "OpenClaw.SignalR.Presence.Payload:";
 
-    /// <summary>分布式连接 id 索引键（内置 Hybrid 存储），内容为 JSON 字符串数组。</summary>
+    /// <summary>
+    /// 匿名或未解析出 <see cref="UserIdClaimType"/> 时，参与载荷键与索引的占位段（经 <see cref="OpenClawSignalRGroupNames.NormalizeSegment"/>）；
+    /// 完整键形如 <c>前缀 + segment + ":" + connectionId</c>。
+    /// </summary>
+    public string ConnectionPresenceAnonymousKeySegment { get; set; } = "anon";
+
+    /// <summary>分布式连接索引键（内置 Hybrid 存储），内容为 JSON 字符串数组，每项为 <c>userKeySegment|connectionId</c>。</summary>
     public string ConnectionPresenceIndexKey { get; set; } = "OpenClaw.SignalR.Presence.Index";
 }

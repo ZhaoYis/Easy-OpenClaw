@@ -43,7 +43,7 @@ internal sealed class OpenClawSignalRHybridPresenceTestHost : IAsyncDisposable
                 o.Jwt.Audience = TestJwtTokens.Audience;
                 o.TierClaimType = "tier";
             })
-            .UseHybridConnectionPresence();
+            .UseHybridStore();
 
         var app = builder.Build();
         app.UseAuthentication();

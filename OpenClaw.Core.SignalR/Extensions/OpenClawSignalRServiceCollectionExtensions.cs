@@ -19,10 +19,9 @@ public static class OpenClawSignalRServiceCollectionExtensions
     /// <see cref="OpenClawGatewayConnectHostedService"/>。
     /// </summary>
     /// <returns>
-    /// 构建器；须继续调用 <see cref="OpenClawSignalRGatewayBuilder.UseMemoryConnectionPresence"/>、
-    /// <see cref="OpenClawSignalRGatewayBuilder.UseHybridConnectionPresence"/> 或
-    /// <see cref="OpenClawSignalRGatewayBuilder.UseCustomConnectionPresence"/> /
-    /// <see cref="OpenClawSignalRGatewayBuilder.UseConnectionPresenceStore{TStore}"/> 以注册
+    /// 构建器；须继续调用 <see cref="OpenClawSignalRGatewayBuilder.UseMemoryStore"/>、
+    /// <see cref="OpenClawSignalRGatewayBuilder.UseHybridStore"/> 或
+    /// <see cref="OpenClawSignalRGatewayBuilder.UseCustomStore{TStore}"/> 以注册
     /// <see cref="IOpenClawSignalRConnectionPresenceStore"/>。
     /// </returns>
     /// <remarks>

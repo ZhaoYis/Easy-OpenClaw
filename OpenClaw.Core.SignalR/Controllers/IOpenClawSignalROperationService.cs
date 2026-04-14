@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 
 namespace OpenClaw.Core.SignalR;
@@ -8,8 +9,8 @@ namespace OpenClaw.Core.SignalR;
 /// <typeparam name="THub">与 <c>MapHub&lt;THub&gt;</c> 一致的 Hub 类型。</typeparam>
 /// <remarks>
 /// 连接列表来自 <see cref="IOpenClawSignalRConnectionPresenceStore"/>（由
-/// <see cref="OpenClawSignalRGatewayBuilder.UseMemoryConnectionPresence"/>、
-/// <see cref="OpenClawSignalRGatewayBuilder.UseHybridConnectionPresence"/> 或自定义注册提供）。
+/// <see cref="OpenClawSignalRGatewayBuilder.UseMemoryStore"/>、
+/// <see cref="OpenClawSignalRGatewayBuilder.UseHybridStore"/> 或自定义注册提供）。
 /// <see cref="SendToUserAsync"/> 使用的 <paramref name="userId"/> 须与 JWT/Claims 中
 /// <see cref="OpenClawSignalROptions.UserIdClaimType"/> 及 <see cref="OpenClawSignalRUserIdProvider"/> 解析结果一致。
 /// </remarks>
@@ -30,6 +31,10 @@ public interface IOpenClawSignalROperationService<THub>
     Task<IReadOnlyList<OpenClawSignalRConnectionSnapshot>> GetConnectionsForUserAsync(string userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>当前 <paramref name="user"/> 解析出的用户 id 在运营存储中的连接（无用户 id 声明时返回空列表）。</summary>
+    Task<IReadOnlyList<OpenClawSignalRConnectionSnapshot>> GetConnectionsForCurrentUserAsync(ClaimsPrincipal user,
+        CancellationToken cancellationToken = default);
+
     /// <summary>统计各 SignalR 组当前覆盖的连接数（同一连接在多个组中会分别计数）。</summary>
     Task<IReadOnlyDictionary<string, int>> GetSignalRGroupConnectionCountsAsync(
         CancellationToken cancellationToken = default);
@@ -42,6 +47,13 @@ public interface IOpenClawSignalROperationService<THub>
 
     /// <summary>向该用户的所有连接调用客户端方法（依赖 <see cref="IUserIdProvider"/>）。</summary>
     Task SendToUserAsync(string userId, string hubMethod, object?[]? args = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 根据运营存储中当前用户的 <see cref="OpenClawSignalRConnectionSnapshot.ConnectionId"/> 列表发送（与
+    /// <see cref="SendToUserAsync"/> 数据源一致）；无用户 id 或无在线连接时不发送。
+    /// </summary>
+    Task SendToCurrentUserConnectionsAsync(ClaimsPrincipal user, string hubMethod, object?[]? args = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>向指定连接调用客户端方法。</summary>

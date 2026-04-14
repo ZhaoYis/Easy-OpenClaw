@@ -24,6 +24,8 @@ public sealed class OpenClawSignalROperationServiceTests
             Assert.Equal("ops-user", snap.UserId);
             Assert.Equal("paid", snap.Tier);
             Assert.Contains("oc:system", snap.SignalRGroups);
+            Assert.NotNull(snap.Principal);
+            Assert.True(snap.Principal!.IsAuthenticated);
 
             var byUser = await ops.GetConnectionsForUserAsync("ops-user");
             Assert.Single(byUser);
@@ -98,6 +100,8 @@ public sealed class OpenClawSignalROperationServiceTests
         Assert.Equal(1, await ops.GetOnlineConnectionCountAsync());
         var snap = (await ops.GetOnlineConnectionsAsync())[0];
         Assert.Null(snap.UserId);
+        Assert.NotNull(snap.Principal);
+        Assert.False(snap.Principal!.IsAuthenticated);
         Assert.Empty(await ops.GetDistinctOnlineUserIdsAsync());
 
         await connection.DisposeAsync();

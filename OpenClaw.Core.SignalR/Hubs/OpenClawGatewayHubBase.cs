@@ -29,18 +29,27 @@ public abstract class OpenClawGatewayHubBase : Hub
     }
 
     /// <summary>在加入默认组之后调用；返回额外要加入的组名（已规范化，可直接使用）。</summary>
-    protected virtual IEnumerable<string> GetAdditionalConnectionGroups(OpenClawSignalRConnectionContext context) =>
-        [];
+    protected virtual IEnumerable<string> GetAdditionalConnectionGroups(OpenClawSignalRConnectionContext context) => [];
 
     /// <summary>在 RPC 白名单校验之后、发往网关之前调用；可抛出 <see cref="HubException"/> 拒绝调用。</summary>
-    protected virtual ValueTask OnBeforeInvokeRpcAsync(string method, CancellationToken cancellationToken) =>
-        ValueTask.CompletedTask;
+    protected virtual ValueTask OnBeforeInvokeRpcAsync(string method, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+
+    /// <summary>
+    /// 为 true 时拒绝未认证建连（默认）；匿名 Hub 应重写为 false。
+    /// </summary>
+    protected virtual bool RequireAuthenticatedConnection => true;
 
     public override async Task OnConnectedAsync()
     {
         var opts = _options.Value;
         var ctx = new OpenClawSignalRConnectionContext(Context.ConnectionId, Context.User, opts);
         var isAuthenticated = Context.User?.Identity?.IsAuthenticated == true;
+        if (RequireAuthenticatedConnection && !isAuthenticated)
+        {
+            _logger.LogWarning("User is not authenticated（{ConnectionId}）, connection rejected", Context.ConnectionId);
+            throw new HubException("User is not authenticated");
+        }
+
         var groups = OpenClawSignalRJoinedGroups.Build(
             Context.User,
             isAuthenticated,
@@ -48,36 +57,31 @@ public abstract class OpenClawGatewayHubBase : Hub
             GetAdditionalConnectionGroups(ctx));
 
         foreach (var g in groups)
-            await Groups.AddToGroupAsync(Context.ConnectionId, g).ConfigureAwait(false);
-
-        if (isAuthenticated)
         {
-            var userId = OpenClawSignalRClaimResolution.GetUserId(Context.User, opts.UserIdClaimType);
-            if (string.IsNullOrWhiteSpace(userId))
-            {
-                _logger.LogWarning("Authenticated connection {ConnectionId} has no claim {ClaimType}; user group not joined",
-                    Context.ConnectionId, opts.UserIdClaimType);
-            }
+            await Groups.AddToGroupAsync(Context.ConnectionId, g).ConfigureAwait(false);
         }
 
         var snapshotUserId = OpenClawSignalRClaimResolution.GetUserId(Context.User, opts.UserIdClaimType);
         var tier = OpenClawSignalRJoinedGroups.ResolveTierForSnapshot(Context.User, opts);
         // 断开时 ConnectionAborted 常已处于取消状态，故注册/移除使用 None，避免因 token 取消导致未能清理运营快照。
-        await _presenceStore.RegisterAsync(
-            new OpenClawSignalRConnectionSnapshot(
-                Context.ConnectionId,
-                string.IsNullOrWhiteSpace(snapshotUserId) ? null : snapshotUserId,
-                tier,
-                DateTimeOffset.UtcNow,
-                groups.ToArray()),
-            CancellationToken.None).ConfigureAwait(false);
+        await _presenceStore.RegisterAsync(new OpenClawSignalRConnectionSnapshot(
+            Context.ConnectionId,
+            snapshotUserId,
+            tier,
+            DateTimeOffset.UtcNow,
+            groups.ToArray(),
+            OpenClawSignalRPrincipalSnapshot.From(Context.User)), CancellationToken.None).ConfigureAwait(false);
 
         await base.OnConnectedAsync().ConfigureAwait(false);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        await _presenceStore.RemoveAsync(Context.ConnectionId, CancellationToken.None).ConfigureAwait(false);
+        var disconnectUserId = OpenClawSignalRClaimResolution.GetUserId(Context.User, _options.Value.UserIdClaimType);
+        await _presenceStore.RemoveAsync(
+            Context.ConnectionId,
+            disconnectUserId,
+            CancellationToken.None).ConfigureAwait(false);
         await base.OnDisconnectedAsync(exception).ConfigureAwait(false);
     }
 

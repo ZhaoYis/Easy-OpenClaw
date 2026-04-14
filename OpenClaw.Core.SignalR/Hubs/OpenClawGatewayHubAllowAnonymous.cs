@@ -19,4 +19,6 @@ public sealed class OpenClawGatewayHubAllowAnonymous : OpenClawGatewayHubBase
         : base(rpc, options, presenceStore, loggerFactory)
     {
     }
+
+    protected override bool RequireAuthenticatedConnection => false;
 }

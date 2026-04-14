@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -52,6 +53,15 @@ public abstract class OpenClawSignalROperationControllerBase<THub> : ControllerB
         CancellationToken cancellationToken) =>
         Ok(await _operations.GetConnectionsForUserAsync(userId, cancellationToken).ConfigureAwait(false));
 
+    /// <summary>当前认证用户（JWT/Claims）在运营存储中的连接快照；须已认证且能解析出用户 id。</summary>
+    [Authorize]
+    [HttpGet("connections/me")]
+    [ProducesResponseType(typeof(IReadOnlyList<OpenClawSignalRConnectionSnapshot>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<IReadOnlyList<OpenClawSignalRConnectionSnapshot>>> GetMyConnections(
+        CancellationToken cancellationToken) =>
+        Ok(await _operations.GetConnectionsForCurrentUserAsync(User, cancellationToken).ConfigureAwait(false));
+
     /// <summary>各 SignalR 组当前覆盖的连接数。</summary>
     [HttpGet("groups/counts")]
     [ProducesResponseType(typeof(IReadOnlyDictionary<string, int>), StatusCodes.Status200OK)]
@@ -80,6 +90,24 @@ public abstract class OpenClawSignalROperationControllerBase<THub> : ControllerB
     {
         await _operations.SendToUserAsync(
                 request.UserId,
+                request.HubMethod,
+                ToObjectArgs(request.Args),
+                cancellationToken)
+            .ConfigureAwait(false);
+        return NoContent();
+    }
+
+    /// <summary>向当前认证用户在运营存储中的连接发送 Hub 客户端方法调用。</summary>
+    [Authorize]
+    [HttpPost("send/me")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> SendToMyConnectionsAsync(
+        [FromBody] OpenClawSignalRSendToCurrentUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _operations.SendToCurrentUserConnectionsAsync(
+                User,
                 request.HubMethod,
                 ToObjectArgs(request.Args),
                 cancellationToken)

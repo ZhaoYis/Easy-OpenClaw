@@ -21,7 +21,7 @@ public sealed class OpenClawSignalRGatewayBuilder
     /// <summary>
     /// 使用进程内 <see cref="IMemoryCache"/> 与锁保护的连接 id 集合（非分布式）。
     /// </summary>
-    public IServiceCollection UseMemoryConnectionPresence()
+    public IServiceCollection UseMemoryStore()
     {
         ClearPresenceRegistrations();
         Services.AddMemoryCache();
@@ -39,7 +39,7 @@ public sealed class OpenClawSignalRGatewayBuilder
     /// 请勿在此调用 <c>AddHybridCache</c>，由本方法在回调之后统一注册。
     /// </param>
     /// <param name="configureHybridCache">可选；传给 <c>AddHybridCache</c> 的选项配置。</param>
-    public IServiceCollection UseHybridConnectionPresence(
+    public IServiceCollection UseHybridStore(
         Action<IServiceCollection>? configureCachingInfrastructure = null,
         Action<HybridCacheOptions>? configureHybridCache = null)
     {
@@ -63,19 +63,8 @@ public sealed class OpenClawSignalRGatewayBuilder
         return Services;
     }
 
-    /// <summary>
-    /// 由宿主自行注册 <see cref="IOpenClawSignalRConnectionPresenceStore"/>（可注册为实现类型单例或工厂）。
-    /// </summary>
-    public IServiceCollection UseCustomConnectionPresence(Action<IServiceCollection> registerStore)
-    {
-        ArgumentNullException.ThrowIfNull(registerStore);
-        ClearPresenceRegistrations();
-        registerStore(Services);
-        return Services;
-    }
-
     /// <summary>使用自定义 <typeparamref name="TStore"/> 作为 <see cref="IOpenClawSignalRConnectionPresenceStore"/> 实现。</summary>
-    public IServiceCollection UseConnectionPresenceStore<TStore>()
+    public IServiceCollection UseCustomStore<TStore>()
         where TStore : class, IOpenClawSignalRConnectionPresenceStore
     {
         ClearPresenceRegistrations();
