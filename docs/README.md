@@ -118,7 +118,7 @@ app.MapHub<OpenClawGatewayHub>("/hubs/openclaw").RequireAuthorization();
 运营侧 REST（在线连接查询、按用户/连接/组下发）见 `IOpenClawSignalROperationService` /
 `OpenClawSignalROperationControllerBase`（测试与用法可参考 `OpenClaw.Core.SignalR.Tests`）。
 
-`invokeRpcAsync` / 客户端事件名与网关推送的关系见 [docs/openclaw-events-and-rpc.md](docs/openclaw-events-and-rpc.md) 第
+`invokeRpcAsync` / 客户端事件名与网关推送的关系见 [openclaw-events-and-rpc.md](openclaw-events-and-rpc.md) 第
 5 节。
 
 ---
