@@ -24,20 +24,40 @@ public sealed class GatewayClientStateAndConnectionTests
         public int SaveTokenCount { get; private set; }
         public int SaveScopesCount { get; private set; }
 
-        public string? LoadDeviceToken() => InitialToken;
+        public object? LastLoadedState { get; private set; }
+        public object? LastSavedState { get; private set; }
+        public GatewayOptions? LastGatewayOptions { get; private set; }
 
-        public void SaveDeviceToken(string token)
+        public Task<string?> LoadDeviceTokenAsync(object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
+        {
+            LastLoadedState = state;
+            LastGatewayOptions = gatewayOptions;
+            return Task.FromResult(InitialToken);
+        }
+
+        public Task SaveDeviceTokenAsync(string token, object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
         {
             SaveTokenCount++;
             LastSavedToken = token;
+            LastSavedState = state;
+            LastGatewayOptions = gatewayOptions;
+            return Task.CompletedTask;
         }
 
-        public string[]? LoadDeviceScopes() => InitialScopes;
+        public Task<string[]?> LoadDeviceScopesAsync(object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
+        {
+            LastLoadedState = state;
+            LastGatewayOptions = gatewayOptions;
+            return Task.FromResult(InitialScopes);
+        }
 
-        public void SaveDeviceScopes(string[] scopes)
+        public Task SaveDeviceScopesAsync(string[] scopes, object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
         {
             SaveScopesCount++;
             LastSavedScopes = scopes;
+            LastSavedState = state;
+            LastGatewayOptions = gatewayOptions;
+            return Task.CompletedTask;
         }
     }
 
@@ -54,22 +74,22 @@ public sealed class GatewayClientStateAndConnectionTests
     /// <see cref="FileGatewayClientStateStore"/> 应从配置路径读写 token，且路径为 null 时加载为 null。
     /// </summary>
     [Fact]
-    public void FileStateStore_roundtrips_token_when_path_configured()
+    public async Task FileStateStore_roundtrips_token_when_path_configured()
     {
         var path = Path.Combine(Path.GetTempPath(), $"openclaw-dt-{Guid.NewGuid():N}.txt");
         try
         {
             File.WriteAllText(path, "  tok-from-disk  \n");
-            var opts = Options.Create(new GatewayOptions
+            var gatewayOptions = new GatewayOptions
             {
                 Url = "ws://x",
                 Token = "t",
                 DeviceTokenFilePath = path,
                 DeviceScopesFilePath = null,
-            });
-            var store = new FileGatewayClientStateStore(opts);
-            Assert.Equal("tok-from-disk", store.LoadDeviceToken());
-            store.SaveDeviceToken("new-tok");
+            };
+            var store = new FileGatewayClientStateStore();
+            Assert.Equal("tok-from-disk", await store.LoadDeviceTokenAsync(null, gatewayOptions));
+            await store.SaveDeviceTokenAsync("new-tok", null, gatewayOptions);
             Assert.Equal("new-tok", File.ReadAllText(path).Trim());
         }
         finally
@@ -89,22 +109,22 @@ public sealed class GatewayClientStateAndConnectionTests
     /// <see cref="FileGatewayClientStateStore"/> 应读写 scopes JSON 数组。
     /// </summary>
     [Fact]
-    public void FileStateStore_roundtrips_scopes_json()
+    public async Task FileStateStore_roundtrips_scopes_json()
     {
         var path = Path.Combine(Path.GetTempPath(), $"openclaw-sc-{Guid.NewGuid():N}.json");
         try
         {
-            var opts = Options.Create(new GatewayOptions
+            var gatewayOptions = new GatewayOptions
             {
                 Url = "ws://x",
                 Token = "t",
                 DeviceTokenFilePath = null,
                 DeviceScopesFilePath = path,
-            });
-            var store = new FileGatewayClientStateStore(opts);
-            Assert.Null(store.LoadDeviceScopes());
-            store.SaveDeviceScopes(["a", "b"]);
-            var loaded = store.LoadDeviceScopes();
+            };
+            var store = new FileGatewayClientStateStore();
+            Assert.Null(await store.LoadDeviceScopesAsync(null, gatewayOptions));
+            await store.SaveDeviceScopesAsync(["a", "b"], null, gatewayOptions);
+            var loaded = await store.LoadDeviceScopesAsync(null, gatewayOptions);
             Assert.NotNull(loaded);
             Assert.Equal(new[] { "a", "b" }, loaded);
         }
@@ -122,10 +142,10 @@ public sealed class GatewayClientStateAndConnectionTests
     }
 
     /// <summary>
-    /// 自定义 <see cref="IGatewayClientStateStore"/> 应在构造时注入初始 token/scopes，并在 ProcessHelloOk 时触发保存。
+    /// 自定义 <see cref="IGatewayClientStateStore"/> 应在拉取持久化状态后反映 Initial token/scopes，并在 ProcessHelloOk 时触发保存。
     /// </summary>
     [Fact]
-    public void Custom_state_store_loads_initial_values_and_receives_saves_on_hello_ok()
+    public async Task Custom_state_store_loads_initial_values_and_receives_saves_on_hello_ok()
     {
         var state = new RecordingStateStore
         {
@@ -145,6 +165,7 @@ public sealed class GatewayClientStateAndConnectionTests
             new DefaultGatewayClientConnectionResolver());
         client.AttachWebSocketForTests(new LoopbackWebSocket(client));
 
+        await GatewayClientPrivateApi.LoadPersistedDeviceStateAsync(client);
         var p = GatewayClientPrivateApi.BuildConnectParams(client, "n");
         Assert.Equal("preloaded", p.Auth?.DeviceToken);
 
@@ -165,13 +186,14 @@ public sealed class GatewayClientStateAndConnectionTests
         Assert.Equal("fresh-token", state.LastSavedToken);
         Assert.Equal(1, state.SaveScopesCount);
         Assert.Equal(new[] { "s1", "s2" }, state.LastSavedScopes);
+        Assert.Same(opts.Value, state.LastGatewayOptions);
     }
 
     /// <summary>
     /// 两个客户端使用不同 <see cref="IGatewayClientStateStore"/> 时应各自维护独立的 connect 签名上下文（deviceToken + scopes）。
     /// </summary>
     [Fact]
-    public void Two_clients_isolated_state_produce_distinct_connect_auth()
+    public async Task Two_clients_isolated_state_produce_distinct_connect_auth()
     {
         var baseOpts = new GatewayOptions { Url = "ws://unit.test", Token = "shared", KeyFilePath = null };
         var opts = Options.Create(baseOpts);
@@ -187,6 +209,8 @@ public sealed class GatewayClientStateAndConnectionTests
         var a = CreateClient(opts, new RecordingStateStore { InitialToken = "tok-a", InitialScopes = ["a"] });
         var b = CreateClient(opts, new RecordingStateStore { InitialToken = "tok-b", InitialScopes = ["b"] });
 
+        await GatewayClientPrivateApi.LoadPersistedDeviceStateAsync(a);
+        await GatewayClientPrivateApi.LoadPersistedDeviceStateAsync(b);
         var pa = GatewayClientPrivateApi.BuildConnectParams(a, "nonce");
         var pb = GatewayClientPrivateApi.BuildConnectParams(b, "nonce");
         Assert.Equal("tok-a", pa.Auth?.DeviceToken);

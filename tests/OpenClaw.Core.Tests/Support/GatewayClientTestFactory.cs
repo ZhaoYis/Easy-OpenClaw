@@ -33,7 +33,7 @@ internal static class GatewayClientTestFactory
         var requests = new GatewayRequestManager(options);
         var events = new EventRouter();
         var device = DeviceIdentity.LoadOrCreate(null);
-        var stateStore = new FileGatewayClientStateStore(options);
+        var stateStore = new FileGatewayClientStateStore();
         var connectionOverrides = new DefaultGatewayClientConnectionResolver();
         var client = new GatewayClient(options, requests, events, device, stateStore, connectionOverrides);
         return (options, requests, events, device, client);

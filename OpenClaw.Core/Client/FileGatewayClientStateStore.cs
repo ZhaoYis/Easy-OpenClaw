@@ -1,27 +1,30 @@
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using OpenClaw.Core.Logging;
 using OpenClaw.Core.Models;
 
 namespace OpenClaw.Core.Client;
 
 /// <summary>
-/// 使用 <see cref="GatewayOptions"/> 中的文件路径读写 DeviceToken 与 scopes，行为与早期内嵌在 <see cref="GatewayClient"/> 中的实现一致。
+/// 使用传入的 <see cref="GatewayOptions"/> 中的文件路径异步读写 DeviceToken 与 scopes，行为与早期内嵌在 <see cref="GatewayClient"/> 中的实现一致。
 /// </summary>
-public sealed class FileGatewayClientStateStore(IOptions<GatewayOptions> options) : IGatewayClientStateStore
+public sealed class FileGatewayClientStateStore : IGatewayClientStateStore
 {
-    private readonly GatewayOptions _options = options.Value;
-
     /// <inheritdoc />
-    public string? LoadDeviceToken()
+    public async Task<string?> LoadDeviceTokenAsync(object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
     {
-        var path = _options.DeviceTokenFilePath;
+        _ = state;
+        var path = gatewayOptions.DeviceTokenFilePath;
         if (path is null || !File.Exists(path)) return null;
 
         try
         {
-            var token = File.ReadAllText(path).Trim();
+            var raw = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+            var token = raw.Trim();
             return string.IsNullOrEmpty(token) ? null : token;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
@@ -30,9 +33,10 @@ public sealed class FileGatewayClientStateStore(IOptions<GatewayOptions> options
     }
 
     /// <inheritdoc />
-    public void SaveDeviceToken(string token)
+    public async Task SaveDeviceTokenAsync(string token, object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
     {
-        var path = _options.DeviceTokenFilePath;
+        _ = state;
+        var path = gatewayOptions.DeviceTokenFilePath;
         if (path is null) return;
 
         try
@@ -40,7 +44,11 @@ public sealed class FileGatewayClientStateStore(IOptions<GatewayOptions> options
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
-            File.WriteAllText(path, token);
+            await File.WriteAllTextAsync(path, token, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -49,16 +57,21 @@ public sealed class FileGatewayClientStateStore(IOptions<GatewayOptions> options
     }
 
     /// <inheritdoc />
-    public string[]? LoadDeviceScopes()
+    public async Task<string[]?> LoadDeviceScopesAsync(object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
     {
-        var path = _options.DeviceScopesFilePath;
+        _ = state;
+        var path = gatewayOptions.DeviceScopesFilePath;
         if (path is null || !File.Exists(path)) return null;
 
         try
         {
-            var json = File.ReadAllText(path).Trim();
+            var json = (await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false)).Trim();
             if (string.IsNullOrEmpty(json)) return null;
             return JsonSerializer.Deserialize<string[]>(json);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
@@ -67,9 +80,10 @@ public sealed class FileGatewayClientStateStore(IOptions<GatewayOptions> options
     }
 
     /// <inheritdoc />
-    public void SaveDeviceScopes(string[] scopes)
+    public async Task SaveDeviceScopesAsync(string[] scopes, object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
     {
-        var path = _options.DeviceScopesFilePath;
+        _ = state;
+        var path = gatewayOptions.DeviceScopesFilePath;
         if (path is null) return;
 
         try
@@ -77,7 +91,12 @@ public sealed class FileGatewayClientStateStore(IOptions<GatewayOptions> options
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
-            File.WriteAllText(path, JsonSerializer.Serialize(scopes));
+            var json = JsonSerializer.Serialize(scopes);
+            await File.WriteAllTextAsync(path, json, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

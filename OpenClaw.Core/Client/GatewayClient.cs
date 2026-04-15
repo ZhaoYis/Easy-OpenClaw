@@ -31,6 +31,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
     private string? _deviceToken;
     private string[]? _cachedScopes;
     private HelloOkPayload? _helloOk;
+
     /// <summary>最近一次（或当前）建连调用传入的上下文，用于断线重连时把同一 state 交给 <see cref="IGatewayClientConnectionResolver"/>。</summary>
     private object? _lastConnectionState;
 
@@ -82,7 +83,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
     /// <summary>
     /// 初始化网关客户端，注入配置、请求管理器、事件路由器和设备身份。
-    /// 构造时尝试从磁盘加载缓存的 DeviceToken 以支持免审批重连。
+    /// DeviceToken / scopes 不在此预加载，而是在每次建连（<see cref="ConnectAsync"/>）开始时从 <see cref="IGatewayClientStateStore"/> 拉取。
     /// </summary>
     /// <param name="options">网关连接配置（URL、认证信息、超时等）</param>
     /// <param name="gatewayRequests">请求/响应关联管理器</param>
@@ -105,14 +106,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
         _stateStore = stateStore;
         _connectionResolver = connectionResolver;
 
-        _deviceToken = _stateStore.LoadDeviceToken();
-        _cachedScopes = _stateStore.LoadDeviceScopes();
-
         Log.Info($"Device ID: {_device.DeviceId[..16]}...");
-        if (_deviceToken is not null)
-            Log.Debug("已加载缓存的 deviceToken");
-        if (_cachedScopes is not null)
-            Log.Debug($"已加载缓存的 scopes: [{string.Join(", ", _cachedScopes)}]");
     }
 
     // ─── Public API ────────────────────────────────────────
@@ -131,9 +125,29 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// <exception cref="TimeoutException">等待 challenge 超过 10 秒时抛出</exception>
     public Task ConnectAsync(CancellationToken ct = default) => ConnectCoreAsync(null, ct);
 
+    /// <summary>
+    /// 建立连接并完成握手；<paramref name="state"/> 会传给 <see cref="IGatewayClientConnectionResolver"/> 与
+    /// <see cref="IGatewayClientStateStore"/>，用于按用户解析 URL/指纹及读写分用户的 DeviceToken、scopes。
+    /// </summary>
+    public Task ConnectAsync(object? state, CancellationToken ct = default) => ConnectCoreAsync(state, ct);
+
+    /// <summary>
+    /// 从 <see cref="IGatewayClientStateStore"/> 拉取与 <paramref name="state"/> 对应的 deviceToken、scopes，写入内存字段供后续 connect 签名与 auth 使用。
+    /// </summary>
+    private async Task LoadPersistedDeviceStateAsync(object? state, CancellationToken ct)
+    {
+        _deviceToken = await _stateStore.LoadDeviceTokenAsync(state, _options, ct).ConfigureAwait(false);
+        _cachedScopes = await _stateStore.LoadDeviceScopesAsync(state, _options, ct).ConfigureAwait(false);
+        if (_deviceToken is not null)
+            Log.Debug("已加载缓存的 deviceToken");
+        if (_cachedScopes is not null)
+            Log.Debug($"已加载缓存的 scopes: [{string.Join(", ", _cachedScopes)}]");
+    }
+
     private async Task ConnectCoreAsync(object? state, CancellationToken ct)
     {
         _lastConnectionState = state;
+        await LoadPersistedDeviceStateAsync(state, ct).ConfigureAwait(false);
         _state = ConnectionState.Connecting;
         _lifetimeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
@@ -182,9 +196,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
                 throw new DeviceAuthException(errText, authErr, connectResp.Error);
             }
 
-            if (authErr is { Code: GatewayConstants.ErrorCodes.AuthTokenMismatch }
-                && authErr.CanRetryWithDeviceToken == true
-                && _deviceToken is not null)
+            if (authErr is { Code: GatewayConstants.ErrorCodes.AuthTokenMismatch, CanRetryWithDeviceToken: true } && _deviceToken is not null)
             {
                 Log.Warn("AUTH_TOKEN_MISMATCH — 尝试使用缓存的 deviceToken 重试一次...");
                 connectResp = await RetryConnectWithDeviceTokenOnlyAsync(state, nonce, _lifetimeCts.Token);
@@ -438,14 +450,14 @@ public sealed partial class GatewayClient : IAsyncDisposable
             if (auth.DeviceToken is { } dt)
             {
                 _deviceToken = dt;
-                _stateStore.SaveDeviceToken(dt);
+                await _stateStore.SaveDeviceTokenAsync(dt, state, _options, ct).ConfigureAwait(false);
                 Log.Success("  DeviceToken 已保存");
             }
 
             if (auth.Scopes is { Length: > 0 } scopes)
             {
                 _cachedScopes = scopes;
-                _stateStore.SaveDeviceScopes(scopes);
+                await _stateStore.SaveDeviceScopesAsync(scopes, state, _options, ct).ConfigureAwait(false);
                 Log.Debug("  Scopes 已缓存");
             }
 
@@ -535,11 +547,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         var primary = tokens[0];
         _deviceToken = primary.DeviceToken;
-        _stateStore.SaveDeviceToken(primary.DeviceToken);
+        await _stateStore.SaveDeviceTokenAsync(primary.DeviceToken, state, _options, ct).ConfigureAwait(false);
         if (primary.Scopes is { Length: > 0 } scopes)
         {
             _cachedScopes = scopes;
-            _stateStore.SaveDeviceScopes(scopes);
+            await _stateStore.SaveDeviceScopesAsync(scopes, state, _options, ct).ConfigureAwait(false);
         }
 
         Log.Success($"  已持久化 bootstrap handoff token（共 {tokens.Length} 个）");

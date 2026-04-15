@@ -53,6 +53,7 @@ public static class OpenClawSignalRServiceCollectionExtensions
         services.AddSingleton<IOpenClawSignalRGatewayHubBridge>(static sp =>
             sp.GetRequiredService<OpenClawSignalRGatewayHubBridgeCoordinator<THub>>());
         services.AddSingleton<IGatewayClientConnectionResolver, OpenClawSignalRGatewayClientConnectionResolver>();
+        services.AddSingleton<IGatewayClientStateStore, OpenClawSignalRGatewayClientStateStore>();
         return new OpenClawSignalRGatewayBuilder(services);
     }
 }

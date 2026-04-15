@@ -33,7 +33,6 @@ internal sealed class JwtSignalRTestHost : IAsyncDisposable
         builder.Services.AddAuthorization();
         builder.Services.AddOpenClawSignalRAuthentication();
         builder.Services.AddSignalR(o => o.EnableDetailedErrors = true);
-        builder.Services.AddSingleton<IOpenClawGatewayRpc>(_ => new FakeOpenClawGatewayRpc());
         builder.Services.AddSingleton<IGatewayEventAudienceResolver, PayloadTargetUserAudienceResolver>();
 
         builder.Services.AddOpenClawSignalRGateway<OpenClawGatewayHub>(configure: o =>
@@ -46,6 +45,9 @@ internal sealed class JwtSignalRTestHost : IAsyncDisposable
                 configureSignalR?.Invoke(o);
             })
             .UseMemoryStore();
+
+        // 覆盖 TryAdd 的 OpenClawGatewayRpc，避免 Hub RPC 依赖未建连的 GatewayClient（参见 SignalRTestHost 类注释）。
+        builder.Services.AddSingleton<IOpenClawGatewayRpc>(_ => new FakeOpenClawGatewayRpc());
 
         builder.Services.AddControllers().AddApplicationPart(typeof(TestOpenClawOpsController).Assembly);
 

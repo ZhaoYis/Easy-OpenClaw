@@ -36,6 +36,16 @@ internal static class GatewayClientPrivateApi
     }
 
     /// <summary>
+    /// 反射调用私有实例方法 <c>LoadPersistedDeviceStateAsync</c>，从 <see cref="IGatewayClientStateStore"/> 拉取 token/scopes（与建连时一致）。
+    /// </summary>
+    public static Task LoadPersistedDeviceStateAsync(GatewayClient client, object? state = null, CancellationToken ct = default)
+    {
+        var mi = typeof(GatewayClient).GetMethod("LoadPersistedDeviceStateAsync", Instance)
+                 ?? throw new InvalidOperationException("LoadPersistedDeviceStateAsync not found");
+        return (Task)mi.Invoke(client, [state, ct])!;
+    }
+
+    /// <summary>
     /// 反射调用私有实例方法 <c>BuildConnectParams</c>，验证连接参数拼装（含签名字段）。
     /// </summary>
     public static ConnectParams BuildConnectParams(GatewayClient client, string nonce, bool deviceTokenOnly = false)

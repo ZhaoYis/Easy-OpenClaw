@@ -86,7 +86,7 @@ public sealed class OpenClawSignalRIntegrationTests
     [Fact]
     public async Task Broadcaster_forwards_dispatched_event_to_signalr_client()
     {
-        await using var host = await SignalRTestHost.StartAsync(registerFakeRpc: false);
+        await using var host = await SignalRTestHost.StartAsync(registerFakeRpc: true);
 
         var tcs = new TaskCompletionSource<GatewayEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var connection = await ConnectHubAsync(host.BaseUri);
@@ -108,7 +108,7 @@ public sealed class OpenClawSignalRIntegrationTests
     [Fact]
     public async Task Broadcaster_respects_event_allowlist()
     {
-        await using var host = await SignalRTestHost.StartAsync(registerFakeRpc: false, configureSignalR: o =>
+        await using var host = await SignalRTestHost.StartAsync(registerFakeRpc: true, configureSignalR: o =>
         {
             o.EventAllowlist = ["agent"];
         });
@@ -130,7 +130,7 @@ public sealed class OpenClawSignalRIntegrationTests
     [Fact]
     public async Task Broadcaster_skips_when_GatewayEventBroadcastMode_None()
     {
-        await using var host = await SignalRTestHost.StartAsync(registerFakeRpc: false, configureSignalR: o =>
+        await using var host = await SignalRTestHost.StartAsync(registerFakeRpc: true, configureSignalR: o =>
         {
             o.GatewayEventBroadcastMode = GatewayEventBroadcastMode.None;
         });

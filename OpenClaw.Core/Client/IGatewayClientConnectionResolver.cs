@@ -15,7 +15,7 @@ public interface IGatewayClientConnectionResolver
     /// <param name="gatewayOptions">已绑定的全局/默认选项</param>
     /// <param name="ct">取消令牌。</param>
     /// <returns>非空白则使用该地址；否则由 <see cref="GatewayClient"/> 回退到 <see cref="GatewayOptions.Url"/>。</returns>
-    ValueTask<string> ResolveWebSocketUrlAsync(object? state, GatewayOptions gatewayOptions, CancellationToken ct);
+    ValueTask<string> ResolveWebSocketUrlAsync(object? state, GatewayOptions gatewayOptions, CancellationToken ct = default);
 
     /// <summary>
     /// 解析 TLS 证书指纹（证书固定）。
@@ -24,5 +24,5 @@ public interface IGatewayClientConnectionResolver
     /// <param name="gatewayOptions">已绑定的全局/默认选项</param>
     /// <param name="ct">取消令牌。</param>
     /// <returns>非空白则使用该指纹；否则回退到 <see cref="GatewayOptions.TlsFingerprint"/>。</returns>
-    ValueTask<string?> ResolveTlsFingerprintAsync(object? state, GatewayOptions gatewayOptions, CancellationToken ct);
+    ValueTask<string?> ResolveTlsFingerprintAsync(object? state, GatewayOptions gatewayOptions, CancellationToken ct = default);
 }

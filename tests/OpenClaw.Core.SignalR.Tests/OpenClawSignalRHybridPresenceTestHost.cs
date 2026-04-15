@@ -32,7 +32,6 @@ internal sealed class OpenClawSignalRHybridPresenceTestHost : IAsyncDisposable
         builder.Services.AddAuthorization();
         builder.Services.AddOpenClawSignalRAuthentication();
         builder.Services.AddSignalR(o => o.EnableDetailedErrors = true);
-        builder.Services.AddSingleton<IOpenClawGatewayRpc>(_ => new FakeOpenClawGatewayRpc());
         builder.Services.AddSingleton<IGatewayEventAudienceResolver, PayloadTargetUserAudienceResolver>();
 
         builder.Services.AddOpenClawSignalRGateway<OpenClawGatewayHub>(configure: o =>
@@ -44,6 +43,8 @@ internal sealed class OpenClawSignalRHybridPresenceTestHost : IAsyncDisposable
                 o.TierClaimType = "tier";
             })
             .UseHybridStore();
+
+        builder.Services.AddSingleton<IOpenClawGatewayRpc>(_ => new FakeOpenClawGatewayRpc());
 
         var app = builder.Build();
         app.UseAuthentication();
