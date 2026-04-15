@@ -72,10 +72,9 @@ public abstract class OpenClawGatewayHubBase : Hub
             groups,
             OpenClawSignalRPrincipalSnapshot.From(Context.User)), CancellationToken.None).ConfigureAwait(false);
 
-        await _hubBridge.OnHubConnectedAsync(new OpenClawSignalRGatewayHubBridgeContext(
-                Context.ConnectionId,
-                snapshotUserId),
-            Context.ConnectionAborted).ConfigureAwait(false);
+        await _hubBridge
+            .OnHubConnectedAsync(new OpenClawSignalRGatewayHubBridgeContext(Context.ConnectionId, snapshotUserId), Context.ConnectionAborted)
+            .ConfigureAwait(false);
 
         await base.OnConnectedAsync().ConfigureAwait(false);
     }

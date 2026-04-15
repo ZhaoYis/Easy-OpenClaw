@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpenClaw.Core.Client;
 
 namespace OpenClaw.Core.SignalR;
 
@@ -51,6 +52,7 @@ public static class OpenClawSignalRServiceCollectionExtensions
         services.AddSingleton<OpenClawSignalRGatewayHubBridgeCoordinator<THub>>();
         services.AddSingleton<IOpenClawSignalRGatewayHubBridge>(static sp =>
             sp.GetRequiredService<OpenClawSignalRGatewayHubBridgeCoordinator<THub>>());
+        services.AddSingleton<IGatewayClientConnectionResolver, OpenClawSignalRGatewayClientConnectionResolver>();
         return new OpenClawSignalRGatewayBuilder(services);
     }
 }

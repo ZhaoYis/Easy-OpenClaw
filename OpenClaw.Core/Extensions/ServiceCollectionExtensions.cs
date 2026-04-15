@@ -18,7 +18,8 @@ public static class ServiceCollectionExtensions
     ///   <item><see cref="DeviceIdentity"/> — Singleton：设备密钥对在整个应用生命周期中唯一</item>
     ///   <item><see cref="EventRouter"/> — Singleton：事件处理器注册表跨重连保持</item>
     ///   <item><see cref="GatewayRequestManager"/> — Singleton：追踪所有进行中的请求</item>
-    ///   <item><see cref="GatewayClient"/> — Singleton：维护单一 WebSocket 连接状态</item>
+    ///   <item><see cref="IGatewayClientStateStore"/> / <see cref="IGatewayClientConnectionResolver"/> — Singleton：默认可改为按用户注册工厂</item>
+    ///   <item><see cref="GatewayClient"/> — Singleton：维护 WebSocket 连接状态（亦可手动 new 多实例）</item>
     ///   <item><see cref="GatewayEventSubscriber"/> — Singleton：事件订阅管理器与 Client 生命周期一致</item>
     /// </list>
     /// </summary>
@@ -90,6 +91,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<EventRouter>();
         services.AddSingleton<GatewayRequestManager>();
+        services.AddSingleton<IGatewayClientStateStore, FileGatewayClientStateStore>();
+        services.AddSingleton<IGatewayClientConnectionResolver, DefaultGatewayClientConnectionResolver>();
         services.AddSingleton<GatewayClient>();
     }
 }

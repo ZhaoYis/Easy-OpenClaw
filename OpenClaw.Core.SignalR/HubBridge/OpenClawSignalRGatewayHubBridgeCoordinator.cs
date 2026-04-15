@@ -93,7 +93,7 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
             return;
         }
 
-        await _client.ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false);
+        await _client.ConnectWithRetryAsync(context, cancellationToken).ConfigureAwait(false);
         _transportConnected = true;
         _logger.LogInformation(
             "OpenClaw gateway connected after first SignalR client (ConnectionId={ConnectionId} UserId={UserId}).",
@@ -112,7 +112,7 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
         {
             try
             {
-                await _client.DisconnectAsync(cancellationToken).ConfigureAwait(false);
+                await _client.DisconnectAsync(context, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

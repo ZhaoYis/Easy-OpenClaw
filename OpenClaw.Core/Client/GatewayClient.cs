@@ -11,7 +11,8 @@ namespace OpenClaw.Core.Client;
 /// <summary>
 /// High-level client that wraps WebSocket transport, request/response correlation,
 /// event routing, handshake (with Ed25519 device auth), reconnection, and chat helpers.
-/// Singleton 生命周期：维护 WebSocket 连接状态，整个应用中只需一个实例。
+/// 常见用法为通过 DI 注册为 Singleton；也可为不同用户各构造一个实例并注入不同的
+/// <see cref="IGatewayClientStateStore"/> / <see cref="IGatewayClientConnectionResolver"/>。
 /// </summary>
 public sealed partial class GatewayClient : IAsyncDisposable
 {
@@ -19,6 +20,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
     private readonly GatewayRequestManager _gatewayRequests;
     private readonly EventRouter _events;
     private readonly DeviceIdentity _device;
+    private readonly IGatewayClientStateStore _stateStore;
+    private readonly IGatewayClientConnectionResolver _connectionResolver;
     private WebSocketClient? _ws;
     private CancellationTokenSource? _lifetimeCts;
     private int _reconnectAttempts;
@@ -28,6 +31,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
     private string? _deviceToken;
     private string[]? _cachedScopes;
     private HelloOkPayload? _helloOk;
+    /// <summary>最近一次（或当前）建连调用传入的上下文，用于断线重连时把同一 state 交给 <see cref="IGatewayClientConnectionResolver"/>。</summary>
+    private object? _lastConnectionState;
 
     public EventRouter Events => _events;
     public bool IsConnected => _ws?.IsConnected ?? false;
@@ -83,19 +88,25 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// <param name="gatewayRequests">请求/响应关联管理器</param>
     /// <param name="events">事件分发路由器</param>
     /// <param name="device">Ed25519 设备身份，用于握手签名</param>
+    /// <param name="stateStore">DeviceToken / scopes 等状态的加载与持久化策略</param>
+    /// <param name="connectionResolver">可选的 WebSocket URL 与 TLS 指纹覆盖；未指定时回退到 <paramref name="options"/> 中的默认值</param>
     public GatewayClient(
         IOptions<GatewayOptions> options,
         GatewayRequestManager gatewayRequests,
         EventRouter events,
-        DeviceIdentity device)
+        DeviceIdentity device,
+        IGatewayClientStateStore stateStore,
+        IGatewayClientConnectionResolver connectionResolver)
     {
         _options = options.Value;
         _gatewayRequests = gatewayRequests;
         _events = events;
         _device = device;
+        _stateStore = stateStore;
+        _connectionResolver = connectionResolver;
 
-        _deviceToken = LoadDeviceToken();
-        _cachedScopes = LoadDeviceScopes();
+        _deviceToken = _stateStore.LoadDeviceToken();
+        _cachedScopes = _stateStore.LoadDeviceScopes();
 
         Log.Info($"Device ID: {_device.DeviceId[..16]}...");
         if (_deviceToken is not null)
@@ -118,8 +129,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// <exception cref="NotPairedException">设备未配对时抛出</exception>
     /// <exception cref="InvalidOperationException">连接因其他原因失败时抛出</exception>
     /// <exception cref="TimeoutException">等待 challenge 超过 10 秒时抛出</exception>
-    public async Task ConnectAsync(CancellationToken ct = default)
+    public Task ConnectAsync(CancellationToken ct = default) => ConnectCoreAsync(null, ct);
+
+    private async Task ConnectCoreAsync(object? state, CancellationToken ct)
     {
+        _lastConnectionState = state;
         _state = ConnectionState.Connecting;
         _lifetimeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
@@ -131,7 +145,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
             return Task.CompletedTask;
         });
 
-        await ConnectTransportAsync(_lifetimeCts.Token);
+        await ConnectTransportAsync(state, _lifetimeCts.Token);
 
         Log.Info($"等待 {GatewayConstants.Events.ConnectChallenge} ...");
 
@@ -173,7 +187,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
                 && _deviceToken is not null)
             {
                 Log.Warn("AUTH_TOKEN_MISMATCH — 尝试使用缓存的 deviceToken 重试一次...");
-                connectResp = await RetryConnectWithDeviceTokenOnlyAsync(nonce, _lifetimeCts.Token);
+                connectResp = await RetryConnectWithDeviceTokenOnlyAsync(state, nonce, _lifetimeCts.Token);
                 if (!connectResp.Ok)
                 {
                     var retryErr = connectResp.Error?.GetRawText() ?? "unknown";
@@ -191,7 +205,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
             }
         }
 
-        ProcessHelloOk(connectResp);
+        await ProcessHelloOkAsync(state, connectResp, _lifetimeCts.Token);
 
         _state = ConnectionState.Connected;
         _reconnectAttempts = 0;
@@ -201,7 +215,9 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// 主动关闭当前 WebSocket 并取消生命周期令牌，使 <see cref="State"/> 回到 Disconnected；
     /// 不将客户端标记为已释放，可再次调用 <see cref="ConnectAsync"/> / <see cref="ConnectWithRetryAsync"/>。
     /// </summary>
-    public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) => DisconnectAsync(null, cancellationToken);
+
+    public async Task DisconnectAsync(object? state, CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
 
@@ -231,7 +247,9 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// 带 NOT_PAIRED 自动重试的连接方法。
     /// 当设备未配对时，按指数退避轮询重连，直到外部审批服务完成批准。
     /// </summary>
-    public async Task ConnectWithRetryAsync(CancellationToken ct = default)
+    public Task ConnectWithRetryAsync(CancellationToken ct = default) => ConnectWithRetryAsync(null, ct);
+
+    public async Task ConnectWithRetryAsync(object? state, CancellationToken ct = default)
     {
         var attempt = 0;
 
@@ -241,7 +259,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
             try
             {
-                await ConnectAsync(ct);
+                await ConnectCoreAsync(state, ct);
                 if (attempt > 0)
                     Log.Success("审批已通过，连接成功！");
                 return;
@@ -393,7 +411,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// 若响应中包含新的 DeviceToken，自动持久化到磁盘供后续免审批重连使用。
     /// </summary>
     /// <param name="resp">connect 请求的网关响应</param>
-    private void ProcessHelloOk(GatewayResponse resp)
+    private async Task ProcessHelloOkAsync(object? state, GatewayResponse resp, CancellationToken ct)
     {
         if (resp.Payload is not { } payload) return;
 
@@ -420,18 +438,18 @@ public sealed partial class GatewayClient : IAsyncDisposable
             if (auth.DeviceToken is { } dt)
             {
                 _deviceToken = dt;
-                PersistDeviceToken(dt);
+                _stateStore.SaveDeviceToken(dt);
                 Log.Success("  DeviceToken 已保存");
             }
 
             if (auth.Scopes is { Length: > 0 } scopes)
             {
                 _cachedScopes = scopes;
-                PersistDeviceScopes(scopes);
+                _stateStore.SaveDeviceScopes(scopes);
                 Log.Debug("  Scopes 已缓存");
             }
 
-            PersistBootstrapHandoffTokens(auth.DeviceTokens);
+            await PersistBootstrapHandoffTokensAsync(state, auth.DeviceTokens, ct);
         }
 
         if (_helloOk.Snapshot is { } snap)
@@ -493,107 +511,17 @@ public sealed partial class GatewayClient : IAsyncDisposable
             Log.Debug($"  Config: {cfgPath}");
     }
 
-    // ─── DeviceToken Persistence ───────────────────────────
-
-    /// <summary>
-    /// 从磁盘文件加载缓存的 DeviceToken。
-    /// DeviceToken 是服务端在首次配对成功后下发的令牌，持有后可跳过审批直接重连。
-    /// </summary>
-    /// <returns>缓存的 DeviceToken 字符串，文件不存在或为空时返回 null</returns>
-    private string? LoadDeviceToken()
-    {
-        var path = _options.DeviceTokenFilePath;
-        if (path is null || !File.Exists(path)) return null;
-
-        try
-        {
-            var token = File.ReadAllText(path).Trim();
-            return string.IsNullOrEmpty(token) ? null : token;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// 将 DeviceToken 持久化到磁盘文件，供后续应用重启时免审批重连使用。
-    /// 自动创建父目录（若不存在）。写入失败时仅记录警告，不抛出异常。
-    /// </summary>
-    /// <param name="token">要保存的 DeviceToken 字符串</param>
-    private void PersistDeviceToken(string token)
-    {
-        var path = _options.DeviceTokenFilePath;
-        if (path is null) return;
-
-        try
-        {
-            var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir))
-                Directory.CreateDirectory(dir);
-            File.WriteAllText(path, token);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"保存 deviceToken 失败: {ex.Message}");
-        }
-    }
-
-    // ─── DeviceScopes Persistence ─────────────────────────
-
-    /// <summary>
-    /// 从磁盘加载缓存的 scope 集合（JSON 字符串数组）。
-    /// 重连时复用已授予的 approved scope set 以避免权限收窄。
-    /// </summary>
-    private string[]? LoadDeviceScopes()
-    {
-        var path = _options.DeviceScopesFilePath;
-        if (path is null || !File.Exists(path)) return null;
-
-        try
-        {
-            var json = File.ReadAllText(path).Trim();
-            if (string.IsNullOrEmpty(json)) return null;
-            return JsonSerializer.Deserialize<string[]>(json);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// 将服务端授予的 scope 集合持久化到磁盘，供后续重连时复用。
-    /// </summary>
-    private void PersistDeviceScopes(string[] scopes)
-    {
-        var path = _options.DeviceScopesFilePath;
-        if (path is null) return;
-
-        try
-        {
-            var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir))
-                Directory.CreateDirectory(dir);
-            File.WriteAllText(path, JsonSerializer.Serialize(scopes));
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"保存 scopes 失败: {ex.Message}");
-        }
-    }
-
     // ─── Bootstrap Handoff Tokens ─────────────────────────
 
     /// <summary>
     /// 处理 hello-ok.auth.deviceTokens（bootstrap handoff tokens）。
     /// 仅在本次连接使用了 bootstrap auth 且传输层可信（wss:// 或 loopback）时才持久化。
     /// </summary>
-    private void PersistBootstrapHandoffTokens(DeviceTokenEntry[]? tokens)
+    private async Task PersistBootstrapHandoffTokensAsync(object? state, DeviceTokenEntry[]? tokens, CancellationToken ct)
     {
         if (tokens is not { Length: > 0 }) return;
 
-        if (!IsTransportTrusted())
+        if (!await IsTransportTrustedAsync(state, ct))
         {
             Log.Debug($"  收到 {tokens.Length} 个 bootstrap handoff token，但传输层不可信，跳过持久化");
             return;
@@ -607,11 +535,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         var primary = tokens[0];
         _deviceToken = primary.DeviceToken;
-        PersistDeviceToken(primary.DeviceToken);
+        _stateStore.SaveDeviceToken(primary.DeviceToken);
         if (primary.Scopes is { Length: > 0 } scopes)
         {
             _cachedScopes = scopes;
-            PersistDeviceScopes(scopes);
+            _stateStore.SaveDeviceScopes(scopes);
         }
 
         Log.Success($"  已持久化 bootstrap handoff token（共 {tokens.Length} 个）");
@@ -620,9 +548,9 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// <summary>
     /// 判断当前 WebSocket 传输是否可信（wss:// 或 loopback 地址）。
     /// </summary>
-    private bool IsTransportTrusted()
+    private async ValueTask<bool> IsTransportTrustedAsync(object? state, CancellationToken ct)
     {
-        var url = _options.Url;
+        var url = await GetEffectiveWebSocketUrlAsync(state, ct);
         if (url.StartsWith("wss://", StringComparison.OrdinalIgnoreCase))
             return true;
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -635,6 +563,24 @@ public sealed partial class GatewayClient : IAsyncDisposable
         return false;
     }
 
+    /// <summary>
+    /// 解析实际建连使用的 WebSocket URL（覆盖为空时使用 <see cref="GatewayOptions.Url"/>）。
+    /// </summary>
+    internal async ValueTask<string> GetEffectiveWebSocketUrlAsync(object? state, CancellationToken ct)
+    {
+        var o = await _connectionResolver.ResolveWebSocketUrlAsync(state, _options, ct);
+        return string.IsNullOrWhiteSpace(o) ? _options.Url : o;
+    }
+
+    /// <summary>
+    /// 解析 TLS 指纹（覆盖为空时使用 <see cref="GatewayOptions.TlsFingerprint"/>）。
+    /// </summary>
+    internal async ValueTask<string?> GetEffectiveTlsFingerprintAsync(object? state, CancellationToken ct)
+    {
+        var o = await _connectionResolver.ResolveTlsFingerprintAsync(state, _options, ct);
+        return string.IsNullOrWhiteSpace(o) ? _options.TlsFingerprint : o;
+    }
+
     // ─── Transport ─────────────────────────────────────────
 
     /// <summary>
@@ -642,17 +588,19 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// 若已有旧连接则先释放，然后创建新的 <see cref="WebSocketClient"/> 并绑定消息、关闭、错误回调。
     /// </summary>
     /// <param name="ct">取消令牌</param>
-    private async Task ConnectTransportAsync(CancellationToken ct)
+    private async Task ConnectTransportAsync(object? state, CancellationToken ct)
     {
         if (_ws is not null)
             await _ws.DisposeAsync();
 
-        _ws = new WebSocketClient(new Uri(_options.Url), _options.TlsFingerprint);
+        var url = await GetEffectiveWebSocketUrlAsync(state, ct);
+        var tlsFp = await GetEffectiveTlsFingerprintAsync(state, ct);
+        _ws = new WebSocketClient(new Uri(url), tlsFp);
         _ws.OnMessage += OnRawMessage;
         _ws.OnClosed += OnTransportClosed;
         _ws.OnError += OnTransportError;
 
-        Log.Info($"连接 {_options.Url} ...");
+        Log.Info($"连接 {url} ...");
         await _ws.ConnectAsync(ct);
         Log.Success("WebSocket 已连接");
     }
@@ -780,7 +728,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
             try
             {
                 await Task.Delay(_options.ReconnectDelay, _lifetimeCts.Token);
-                await ConnectWithRetryAsync(_lifetimeCts.Token);
+                await ConnectWithRetryAsync(_lastConnectionState, _lifetimeCts.Token);
                 return;
             }
             catch (OperationCanceledException)
@@ -892,7 +840,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// <summary>
     /// AUTH_TOKEN_MISMATCH bounded retry：断开当前传输，重新建连并仅用 deviceToken 做一次重试。
     /// </summary>
-    private async Task<GatewayResponse> RetryConnectWithDeviceTokenOnlyAsync(string previousNonce, CancellationToken ct)
+    private async Task<GatewayResponse> RetryConnectWithDeviceTokenOnlyAsync(object? state, string previousNonce, CancellationToken ct)
     {
         if (_ws is not null) await _ws.DisposeAsync();
 
@@ -903,7 +851,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
             return Task.CompletedTask;
         });
 
-        await ConnectTransportAsync(ct);
+        await ConnectTransportAsync(state, ct);
         var challengeEvt = await challengeTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
         _events.Off(GatewayConstants.Events.ConnectChallenge);
 

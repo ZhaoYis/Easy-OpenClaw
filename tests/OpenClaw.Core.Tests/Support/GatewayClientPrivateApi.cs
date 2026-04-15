@@ -15,13 +15,14 @@ internal static class GatewayClientPrivateApi
     private static readonly BindingFlags Static = BindingFlags.Static | BindingFlags.NonPublic;
 
     /// <summary>
-    /// 反射调用私有实例方法 <c>ProcessHelloOk</c>，将握手结果写入客户端缓存状态。
+    /// 反射调用私有实例方法 <c>ProcessHelloOkAsync</c>（state=null），将握手结果写入客户端缓存状态。
     /// </summary>
     public static void ProcessHelloOk(GatewayClient client, GatewayResponse response)
     {
-        var mi = typeof(GatewayClient).GetMethod("ProcessHelloOk", Instance)
-                 ?? throw new InvalidOperationException("ProcessHelloOk not found");
-        mi.Invoke(client, [response]);
+        var mi = typeof(GatewayClient).GetMethod("ProcessHelloOkAsync", Instance)
+                 ?? throw new InvalidOperationException("ProcessHelloOkAsync not found");
+        var task = (Task)mi.Invoke(client, [null, response, CancellationToken.None])!;
+        task.GetAwaiter().GetResult();
     }
 
     /// <summary>
