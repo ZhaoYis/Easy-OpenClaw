@@ -224,4 +224,66 @@ public static partial class ChatHistoryNormalizer
         ms.Position = 0;
         return JsonDocument.Parse(ms).RootElement.Clone();
     }
+
+    /// <summary>
+    /// 将 <c>chat.history</c> 等服务返回的载荷归一化为适合 UI 展示的形态：
+    /// 根为消息数组，或根对象下存在 <c>messages</c> 数组时对其套用 <see cref="Normalize"/>。
+    /// 其他形状原样返回（克隆）。
+    /// </summary>
+    public static JsonElement NormalizeChatHistoryPayload(JsonElement payload, int oversizeThreshold = DefaultOversizeThreshold)
+    {
+        if (payload.ValueKind == JsonValueKind.Array)
+            return ToJsonArrayElement(Normalize(payload, oversizeThreshold));
+
+        if (payload.ValueKind == JsonValueKind.Object
+            && payload.TryGetProperty("messages", out var msgs)
+            && msgs.ValueKind == JsonValueKind.Array)
+        {
+            var normalized = Normalize(msgs, oversizeThreshold);
+            return ReplacePropertyValue(payload, "messages", ToJsonArrayElement(normalized));
+        }
+
+        return payload.Clone();
+    }
+
+    private static JsonElement ToJsonArrayElement(List<JsonElement> items)
+    {
+        using var ms = new MemoryStream();
+        using (var w = new Utf8JsonWriter(ms))
+        {
+            w.WriteStartArray();
+            foreach (var e in items)
+                e.WriteTo(w);
+            w.WriteEndArray();
+        }
+
+        ms.Position = 0;
+        return JsonDocument.Parse(ms).RootElement.Clone();
+    }
+
+    private static JsonElement ReplacePropertyValue(JsonElement root, string name, JsonElement newValue)
+    {
+        using var ms = new MemoryStream();
+        using (var w = new Utf8JsonWriter(ms))
+        {
+            w.WriteStartObject();
+            foreach (var p in root.EnumerateObject())
+            {
+                if (p.NameEquals(name))
+                {
+                    w.WritePropertyName(name);
+                    newValue.WriteTo(w);
+                }
+                else
+                {
+                    p.WriteTo(w);
+                }
+            }
+
+            w.WriteEndObject();
+        }
+
+        ms.Position = 0;
+        return JsonDocument.Parse(ms).RootElement.Clone();
+    }
 }

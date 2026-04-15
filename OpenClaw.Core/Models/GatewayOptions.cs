@@ -100,6 +100,18 @@ public sealed class GatewayOptions
     /// </summary>
     public int MaxPairingRetries { get; set; }
 
+    /// <summary>
+    /// 为 true 时，在发往上游网关的出站 RPC 上对已知用户文本字段（如 <c>chat.send</c> 的 <c>message</c>）执行
+    /// <see cref="OpenClaw.Core.Helpers.GatewayOutboundMessageSanitizer"/> 清洗，降低提示词注入与伪造控制/工具标记风险。默认 true。
+    /// </summary>
+    public bool SanitizeOutboundUserMessages { get; set; } = true;
+
+    /// <summary>
+    /// 为 true 时，<see cref="Client.GatewayClient.ChatHistoryAsync"/> 在成功响应上对载荷套用
+    /// <see cref="OpenClaw.Core.Helpers.ChatHistoryNormalizer.NormalizeChatHistoryPayload"/>，与协议文档中的 UI 展示归一化一致。默认 true。
+    /// </summary>
+    public bool NormalizeChatHistoryResponse { get; set; } = true;
+
     // ─── Health Monitor ──────────────────────────────────
 
     /// <summary>是否启用后台健康监控服务，默认关闭</summary>

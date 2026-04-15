@@ -345,6 +345,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
     {
         var (id, task) = _gatewayRequests.Register(_options.RequestTimeout);
         var paramsJson = JsonSerializer.SerializeToElement(parameters, JsonDefaults.SerializerOptions);
+        if (_options.SanitizeOutboundUserMessages)
+            paramsJson = GatewayOutboundMessageSanitizer.SanitizeRpcParams(method, paramsJson);
 
         var req = new GatewayRequest
         {
@@ -384,6 +386,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
     private async Task<GatewayResponse> SendRequestRawAsync(string method, JsonElement parameters, CancellationToken ct)
     {
         var (id, task) = _gatewayRequests.Register(_options.RequestTimeout);
+        if (_options.SanitizeOutboundUserMessages)
+            parameters = GatewayOutboundMessageSanitizer.SanitizeRpcParams(method, parameters);
 
         var req = new GatewayRequest
         {

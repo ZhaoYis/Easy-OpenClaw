@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using OpenClaw.Core.Helpers;
 using Xunit;
@@ -78,5 +79,20 @@ public sealed class ChatHistoryNormalizerTests
         Assert.False(ChatHistoryNormalizer.IsSilentAssistantRow("user", "NO_REPLY"));
         Assert.False(ChatHistoryNormalizer.IsSilentAssistantRow("assistant", "hello"));
         Assert.True(ChatHistoryNormalizer.IsSilentAssistantRow("assistant", " no_reply "));
+    }
+
+    /// <summary>
+    /// <see cref="ChatHistoryNormalizer.NormalizeChatHistoryPayload"/> 应对根对象下的 <c>messages</c> 数组做归一化。
+    /// </summary>
+    [Fact]
+    public void NormalizeChatHistoryPayload_normalizes_messages_property()
+    {
+        using var doc = JsonDocument.Parse(
+            """{"sessionKey":"k","messages":[{"role":"assistant","content":"NO_REPLY"},{"role":"user","content":"hi"}]}""");
+        var next = ChatHistoryNormalizer.NormalizeChatHistoryPayload(doc.RootElement);
+        Assert.True(next.TryGetProperty("messages", out var msgs));
+        var rows = msgs.EnumerateArray().ToList();
+        Assert.Single(rows);
+        Assert.Equal("user", rows[0].GetProperty("role").GetString());
     }
 }

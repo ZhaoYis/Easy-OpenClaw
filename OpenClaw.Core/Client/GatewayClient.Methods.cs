@@ -1682,8 +1682,18 @@ public sealed partial class GatewayClient
     /// <param name="sessionKey">会话键，为 null 时使用默认会话</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>网关响应，<see cref="GatewayResponse.Payload"/> 包含消息历史数组</returns>
-    public Task<GatewayResponse> ChatHistoryAsync(string? sessionKey = null, CancellationToken ct = default)
-        => InvokeAsync(GatewayConstants.Methods.ChatHistory, new { sessionKey }, ct);
+    public async Task<GatewayResponse> ChatHistoryAsync(string? sessionKey = null, CancellationToken ct = default)
+    {
+        var resp = await InvokeAsync(GatewayConstants.Methods.ChatHistory, new { sessionKey }, ct);
+        if (!_options.NormalizeChatHistoryResponse || !resp.Ok || resp.Payload is not { } p)
+            return resp;
+
+        var next = ChatHistoryNormalizer.NormalizeChatHistoryPayload(p);
+        if (next.GetRawText() == p.GetRawText())
+            return resp;
+
+        return resp with { Payload = next };
+    }
 
     /// <summary>
     /// 中止当前正在进行的聊天回合。Agent 将立即停止生成并返回已生成的部分。
