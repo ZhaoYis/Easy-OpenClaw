@@ -22,6 +22,7 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
     private readonly SemaphoreSlim _mutex = new(1, 1);
     private int _hubRefCount;
     private bool _wildcardSubscribed;
+    private object? _wildcardSubscriptionState;
     private bool _transportConnected;
 
     /// <summary>注入网关客户端、Hub 上下文、选项、运营存储、受众解析器与日志。</summary>
@@ -45,7 +46,8 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
     /// <param name="context">当前连接 id 与解析出的用户 id</param>
     /// <param name="cancellationToken">取消桥接启动（如连接已中止）</param>
     /// <remarks>首个客户端时注册网关通配符订阅并可选 <see cref="GatewayClient.ConnectWithRetryAsync(object?, CancellationToken)"/>。</remarks>
-    public async Task OnHubConnectedAsync(OpenClawSignalRGatewayHubBridgeContext context, CancellationToken cancellationToken = default)
+    public async Task OnHubConnectedAsync(OpenClawSignalRGatewayHubBridgeContext context,
+        CancellationToken cancellationToken = default)
     {
         await _mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -71,7 +73,8 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
     /// <param name="context">与建连时同一连接上下文</param>
     /// <param name="cancellationToken">取消断开清理</param>
     /// <remarks>最后一个客户端时取消订阅并断开网关传输。</remarks>
-    public async Task OnHubDisconnectedAsync(OpenClawSignalRGatewayHubBridgeContext context, CancellationToken cancellationToken = default)
+    public async Task OnHubDisconnectedAsync(OpenClawSignalRGatewayHubBridgeContext context,
+        CancellationToken cancellationToken = default)
     {
         await _mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -90,9 +93,11 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
     }
 
     /// <summary>首个客户端：订阅网关通配符事件并在启用后台连接时 <see cref="GatewayClient.ConnectWithRetryAsync(object?, CancellationToken)"/>。</summary>
-    private async Task StartBridgeAsync(OpenClawSignalRGatewayHubBridgeContext context, CancellationToken cancellationToken = default)
+    private async Task StartBridgeAsync(OpenClawSignalRGatewayHubBridgeContext context,
+        CancellationToken cancellationToken = default)
     {
-        _client.OnEvent(GatewayConstants.Events.Wildcard, OnGatewayEventAsync);
+        _wildcardSubscriptionState = context;
+        _client.OnEvent(GatewayConstants.Events.Wildcard, context, OnGatewayEventAsync);
         _wildcardSubscribed = true;
 
         if (!_options.Value.EnableBackgroundConnect)
@@ -111,11 +116,13 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
     }
 
     /// <summary>最后一个客户端：取消通配符订阅并 <see cref="GatewayClient.DisconnectAsync(object?, CancellationToken)"/>。</summary>
-    private async Task StopBridgeAsync(OpenClawSignalRGatewayHubBridgeContext context, CancellationToken cancellationToken = default)
+    private async Task StopBridgeAsync(OpenClawSignalRGatewayHubBridgeContext context,
+        CancellationToken cancellationToken = default)
     {
         if (_wildcardSubscribed)
         {
-            _client.Events.Off(GatewayConstants.Events.Wildcard);
+            _client.Events.Off(GatewayConstants.Events.Wildcard, _wildcardSubscriptionState);
+            _wildcardSubscriptionState = null;
             _wildcardSubscribed = false;
         }
 
@@ -140,7 +147,7 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
     }
 
     /// <summary>按 <see cref="OpenClawSignalROptions.GatewayEventBroadcastMode"/> 与受众解析器将事件推送到 SignalR。</summary>
-    private async Task OnGatewayEventAsync(GatewayEvent evt)
+    private async Task OnGatewayEventAsync(GatewayEvent evt, object? state)
     {
         var opts = _options.Value;
         switch (opts.GatewayEventBroadcastMode)
@@ -166,11 +173,12 @@ public sealed class OpenClawSignalRGatewayHubBridgeCoordinator<THub> : IOpenClaw
             snapshots = await _presenceStore.GetSnapshotsAsync(CancellationToken.None).ConfigureAwait(false);
         }
 
-        var resolveContext = new GatewayEventAudienceResolveContext(evt, _hubContext.Clients, opts, snapshots);
+        var resolveContext = new GatewayEventAudienceResolveContext(evt, _hubContext.Clients, opts, snapshots, state);
         if (!_audienceResolver.TryResolveClients(resolveContext, out var target))
         {
             if (opts.LogUnresolvedGatewayEventAudience)
-                _logger.LogDebug("Gateway event {Event} skipped: audience resolver returned no target (seq={Seq})", evt.Event, evt.Seq);
+                _logger.LogDebug("Gateway event {Event} skipped: audience resolver returned no target (seq={Seq})",
+                    evt.Event, evt.Seq);
             return;
         }
 

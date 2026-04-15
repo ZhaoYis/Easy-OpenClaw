@@ -329,9 +329,9 @@ public sealed class GatewayClientCoreTests
     {
         var (client, _) = GatewayClientTestFactory.CreateWithSocket(c => new LoopbackWebSocket(c));
         var ok = false;
-        client.OnEvent("e", _ =>
+        client.OnEvent("e", "user-a", (_, state) =>
         {
-            ok = true;
+            ok = state as string == "user-a";
             return Task.CompletedTask;
         });
         await client.Events.DispatchAsync(new GatewayEvent { Event = "e" });

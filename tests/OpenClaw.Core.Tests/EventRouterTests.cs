@@ -66,4 +66,65 @@ public sealed class EventRouterTests
         await router.DispatchAsync(new GatewayEvent { Event = "e" });
         Assert.True(secondRan);
     }
+
+    /// <summary>
+    /// 订阅时传入的 state 应在分发时原样交给 handler。
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_passes_subscription_state_to_handler()
+    {
+        var router = new EventRouter();
+        var key = new object();
+        object? received = null;
+        router.On("evt", key, (_, s) =>
+        {
+            received = s;
+            return Task.CompletedTask;
+        });
+
+        await router.DispatchAsync(new GatewayEvent { Event = "evt" });
+
+        Assert.Same(key, received);
+    }
+
+    /// <summary>
+    /// <see cref="EventRouter.Off(string, object?)"/> 只移除与 state 匹配的订阅，其它 state 保留。
+    /// </summary>
+    [Fact]
+    public async Task Off_with_state_removes_only_matching_handlers()
+    {
+        var router = new EventRouter();
+        var keyA = new object();
+        var keyB = new object();
+        var hitsA = 0;
+        var hitsB = 0;
+        router.On("e", keyA, (_, _) => { Interlocked.Increment(ref hitsA); return Task.CompletedTask; });
+        router.On("e", keyB, (_, _) => { Interlocked.Increment(ref hitsB); return Task.CompletedTask; });
+
+        router.Off("e", keyA);
+        await router.DispatchAsync(new GatewayEvent { Event = "e" });
+
+        Assert.Equal(0, hitsA);
+        Assert.Equal(1, hitsB);
+    }
+
+    /// <summary>
+    /// <c>Off(name, null)</c> 仅移除订阅时 state 为 <c>null</c> 的处理器。
+    /// </summary>
+    [Fact]
+    public async Task Off_with_null_state_removes_only_null_state_handlers()
+    {
+        var router = new EventRouter();
+        var key = new object();
+        var nullHits = 0;
+        var keyHits = 0;
+        router.On("e", null, (_, _) => { Interlocked.Increment(ref nullHits); return Task.CompletedTask; });
+        router.On("e", key, (_, _) => { Interlocked.Increment(ref keyHits); return Task.CompletedTask; });
+
+        router.Off("e", null);
+        await router.DispatchAsync(new GatewayEvent { Event = "e" });
+
+        Assert.Equal(0, nullHits);
+        Assert.Equal(1, keyHits);
+    }
 }

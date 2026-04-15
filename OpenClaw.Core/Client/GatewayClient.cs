@@ -160,7 +160,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         var challengeTcs = new TaskCompletionSource<GatewayEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        _events.On(GatewayConstants.Events.ConnectChallenge, evt =>
+        _events.On(GatewayConstants.Events.ConnectChallenge, null, (evt, _) =>
         {
             challengeTcs.TrySetResult(evt);
             return Task.CompletedTask;
@@ -181,7 +181,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
             Log.Debug($"  nonce={nonce}, ts={ts}");
         }
 
-        _events.Off(GatewayConstants.Events.ConnectChallenge);
+        _events.Off(GatewayConstants.Events.ConnectChallenge, null);
 
         var connectParams = BuildConnectParams(nonce);
         var connectResp = await SendRequestAsync(GatewayConstants.Methods.Connect, connectParams, _lifetimeCts.Token);
@@ -404,13 +404,22 @@ public sealed partial class GatewayClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// 注册一个网关事件处理器。当收到指定名称的事件时，异步调用 handler。
-    /// 同一事件可注册多个处理器，使用 "*" 可订阅所有事件。
+    /// 注册一个网关事件处理器（无订阅上下文，handler 的 state 恒为 <c>null</c>）。
+    /// 当收到指定名称的事件时，异步调用 handler。同一事件可注册多个处理器，使用 "*" 可订阅所有事件。
     /// </summary>
     /// <param name="eventName">要监听的事件名称（如 "agent"、"chat"、"*" 等）</param>
     /// <param name="handler">异步事件处理回调</param>
     public void OnEvent(string eventName, Func<GatewayEvent, Task> handler)
-        => _events.On(eventName, handler);
+        => OnEvent(eventName, null, (evt, _) => handler(evt));
+
+    /// <summary>
+    /// 注册网关事件处理器并关联 <paramref name="state"/>（如用户 id）；每次收到事件时将同一 state 传入 handler，便于多用户共享客户端实例时隔离上下文。
+    /// </summary>
+    /// <param name="eventName">要监听的事件名称</param>
+    /// <param name="state">订阅方自定义上下文</param>
+    /// <param name="handler">接收 <see cref="GatewayEvent"/> 与订阅时传入的 state</param>
+    public void OnEvent(string eventName, object? state, Func<GatewayEvent, object?, Task> handler)
+        => _events.On(eventName, state, handler);
 
     /// <summary>
     /// 便捷的聊天发送方法。向指定会话发送用户消息，触发 Agent 生成回复。
@@ -879,7 +888,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
         if (_ws is not null) await _ws.DisposeAsync();
 
         var challengeTcs = new TaskCompletionSource<GatewayEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _events.On(GatewayConstants.Events.ConnectChallenge, evt =>
+        _events.On(GatewayConstants.Events.ConnectChallenge, null, (evt, _) =>
         {
             challengeTcs.TrySetResult(evt);
             return Task.CompletedTask;
@@ -887,7 +896,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
 
         await ConnectTransportAsync(state, ct);
         var challengeEvt = await challengeTcs.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
-        _events.Off(GatewayConstants.Events.ConnectChallenge);
+        _events.Off(GatewayConstants.Events.ConnectChallenge, null);
 
         var nonce = "";
         if (challengeEvt.Payload.HasValue)

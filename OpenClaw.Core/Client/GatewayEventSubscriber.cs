@@ -165,7 +165,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterConnectChallenge()
     {
-        _client.OnEvent(GatewayConstants.Events.ConnectChallenge, evt =>
+        _client.OnEvent(GatewayConstants.Events.ConnectChallenge, null, (evt, _) =>
         {
             var nonce = GetString(evt, "nonce");
             var ts = GetString(evt, "ts");
@@ -185,7 +185,7 @@ public sealed class GatewayEventSubscriber
     {
         var firstDelta = false;
 
-        _client.OnEvent(GatewayConstants.Events.Agent, evt =>
+        _client.OnEvent(GatewayConstants.Events.Agent, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -214,7 +214,7 @@ public sealed class GatewayEventSubscriber
             return Task.CompletedTask;
         });
 
-        _client.OnEvent(GatewayConstants.Events.Chat, evt =>
+        _client.OnEvent(GatewayConstants.Events.Chat, null, (evt, _) =>
         {
             if (evt.Payload is { } p)
             {
@@ -234,7 +234,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterChat()
     {
-        _client.OnEvent(GatewayConstants.Events.Chat, evt =>
+        _client.OnEvent(GatewayConstants.Events.Chat, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -261,7 +261,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterChatInject()
     {
-        _client.OnEvent(GatewayConstants.Events.ChatInject, evt =>
+        _client.OnEvent(GatewayConstants.Events.ChatInject, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -281,7 +281,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterSessionMessage()
     {
-        _client.OnEvent(GatewayConstants.Events.SessionMessage, evt =>
+        _client.OnEvent(GatewayConstants.Events.SessionMessage, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -301,7 +301,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterSessionTool()
     {
-        _client.OnEvent(GatewayConstants.Events.SessionTool, evt =>
+        _client.OnEvent(GatewayConstants.Events.SessionTool, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -322,7 +322,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterSessionsChanged()
     {
-        _client.OnEvent(GatewayConstants.Events.SessionsChanged, evt =>
+        _client.OnEvent(GatewayConstants.Events.SessionsChanged, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -342,7 +342,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterPresence()
     {
-        _client.OnEvent(GatewayConstants.Events.Presence, evt =>
+        _client.OnEvent(GatewayConstants.Events.Presence, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -363,7 +363,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterTick()
     {
-        _client.OnEvent(GatewayConstants.Events.Tick, _ =>
+        _client.OnEvent(GatewayConstants.Events.Tick, null, (_, _) =>
         {
             Log.Debug("tick");
             TickReceived?.Invoke();
@@ -376,7 +376,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterTalkMode()
     {
-        _client.OnEvent(GatewayConstants.Events.TalkMode, evt =>
+        _client.OnEvent(GatewayConstants.Events.TalkMode, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -395,7 +395,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterShutdown()
     {
-        _client.OnEvent(GatewayConstants.Events.Shutdown, evt =>
+        _client.OnEvent(GatewayConstants.Events.Shutdown, null, (evt, _) =>
         {
             var reason = evt.Payload is { } p && p.TryGetProperty("reason", out var r)
                 ? r.GetString()
@@ -413,7 +413,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterHealth()
     {
-        _client.OnEvent(GatewayConstants.Events.Health, evt =>
+        _client.OnEvent(GatewayConstants.Events.Health, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -437,7 +437,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterHeartbeat()
     {
-        _client.OnEvent(GatewayConstants.Events.Heartbeat, evt =>
+        _client.OnEvent(GatewayConstants.Events.Heartbeat, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -455,7 +455,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterCron()
     {
-        _client.OnEvent(GatewayConstants.Events.Cron, evt =>
+        _client.OnEvent(GatewayConstants.Events.Cron, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -474,7 +474,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterNodePairRequested()
     {
-        _client.OnEvent(GatewayConstants.Events.NodePairRequested, evt =>
+        _client.OnEvent(GatewayConstants.Events.NodePairRequested, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -495,7 +495,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterNodePairResolved()
     {
-        _client.OnEvent(GatewayConstants.Events.NodePairResolved, evt =>
+        _client.OnEvent(GatewayConstants.Events.NodePairResolved, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -516,7 +516,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterNodeInvokeRequest()
     {
-        _client.OnEvent(GatewayConstants.Events.NodeInvokeRequest, evt =>
+        _client.OnEvent(GatewayConstants.Events.NodeInvokeRequest, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -537,7 +537,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterDevicePairRequested()
     {
-        _client.OnEvent(GatewayConstants.Events.DevicePairRequested, evt =>
+        _client.OnEvent(GatewayConstants.Events.DevicePairRequested, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -558,7 +558,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterDevicePairResolved()
     {
-        _client.OnEvent(GatewayConstants.Events.DevicePairResolved, evt =>
+        _client.OnEvent(GatewayConstants.Events.DevicePairResolved, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -578,7 +578,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterVoicewakeChanged()
     {
-        _client.OnEvent(GatewayConstants.Events.VoicewakeChanged, evt =>
+        _client.OnEvent(GatewayConstants.Events.VoicewakeChanged, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
             var vk = GetKeys(p);
@@ -594,7 +594,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterExecApprovalRequested()
     {
-        _client.OnEvent(GatewayConstants.Events.ExecApprovalRequested, evt =>
+        _client.OnEvent(GatewayConstants.Events.ExecApprovalRequested, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -615,7 +615,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterExecApprovalResolved()
     {
-        _client.OnEvent(GatewayConstants.Events.ExecApprovalResolved, evt =>
+        _client.OnEvent(GatewayConstants.Events.ExecApprovalResolved, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -634,7 +634,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterPluginApprovalRequested()
     {
-        _client.OnEvent(GatewayConstants.Events.PluginApprovalRequested, evt =>
+        _client.OnEvent(GatewayConstants.Events.PluginApprovalRequested, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -656,7 +656,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterPluginApprovalResolved()
     {
-        _client.OnEvent(GatewayConstants.Events.PluginApprovalResolved, evt =>
+        _client.OnEvent(GatewayConstants.Events.PluginApprovalResolved, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -675,7 +675,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterUpdateAvailable()
     {
-        _client.OnEvent(GatewayConstants.Events.UpdateAvailable, evt =>
+        _client.OnEvent(GatewayConstants.Events.UpdateAvailable, null, (evt, _) =>
         {
             if (evt.Payload is not { } p) return Task.CompletedTask;
 
@@ -695,7 +695,7 @@ public sealed class GatewayEventSubscriber
     /// </summary>
     private void RegisterWildcard()
     {
-        _client.Events.On(GatewayConstants.Events.Wildcard, evt =>
+        _client.Events.On(GatewayConstants.Events.Wildcard, null, (evt, _) =>
         {
             if (!KnownEvents.Contains(evt.Event))
             {

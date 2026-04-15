@@ -28,6 +28,7 @@ public static class OpenClawSignalRServiceCollectionExtensions
     /// 在调用本方法<strong>之前</strong>注册自定义 <see cref="IGatewayEventAudienceResolver"/> 可替换默认的
     /// <see cref="NullGatewayEventAudienceResolver"/>（零广播）。常见选项：<see cref="SystemBroadcastGroupGatewayEventAudienceResolver"/>
     /// （与 Hub 建连加入的 <see cref="OpenClawSignalROptions.SystemBroadcastGroupName"/> 一致）、
+    /// <see cref="CurrentUserGatewayEventAudienceResolver"/>（按建桥时的 <see cref="OpenClawSignalRGatewayHubBridgeContext.UserId"/> 使用 <c>Clients.User</c>）、
     /// <see cref="AllPresenceConnectionsGatewayEventAudienceResolver"/>（按运营快照扇出全部连接，成本较高）、
     /// 集成测试或开发可注册 <see cref="AllClientsGatewayEventAudienceResolver"/>（全员推送，有风险）。
     /// </remarks>
@@ -49,7 +50,7 @@ public static class OpenClawSignalRServiceCollectionExtensions
             optionsBuilder.Configure(configure);
 
         services.TryAddSingleton<IOpenClawGatewayRpc, OpenClawGatewayRpc>();
-        services.TryAddSingleton<IGatewayEventAudienceResolver, NullGatewayEventAudienceResolver>();
+        services.TryAddSingleton<IGatewayEventAudienceResolver, CurrentUserGatewayEventAudienceResolver>();
         services.TryAddSingleton<IUserIdProvider, OpenClawSignalRUserIdProvider>();
         services.AddSingleton<IOpenClawSignalROperationService<THub>, OpenClawSignalROperationService<THub>>();
         services.AddSingleton<IOpenClawSystemBroadcastSender<THub>, OpenClawSystemBroadcastSender<THub>>();
