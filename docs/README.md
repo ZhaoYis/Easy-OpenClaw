@@ -75,7 +75,7 @@ await client.ConnectWithRetryAsync();
 `Scopes`、重连与 RPC 超时等——完整定义见 `OpenClaw.Core/Models/GatewayOptions.cs`。
 
 事件订阅、`SendRequestAsync` 与 SignalR
-转暴露的约定见 [/openclaw-events-and-rpc.md](openclaw-events-and-rpc.md)。
+转暴露的约定见 [openclaw-events-and-rpc.md](openclaw-events-and-rpc.md)。
 
 ---
 
