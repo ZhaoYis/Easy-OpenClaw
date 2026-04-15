@@ -12,6 +12,9 @@ public static class OpenClawSignalRClaimResolution
     /// <summary>
     /// 解析用户 id：优先配置的类型，其次 <see cref="ClaimTypes.NameIdentifier"/>（JWT 默认入站映射），再尝试字面 <c>sub</c>。
     /// </summary>
+    /// <param name="user">当前用户；null 时返回 null</param>
+    /// <param name="configuredClaimType"><see cref="OpenClawSignalROptions.UserIdClaimType"/>，如 <c>sub</c></param>
+    /// <returns>非空白用户标识，无法解析时返回 null</returns>
     public static string? GetUserId(ClaimsPrincipal? user, string configuredClaimType)
     {
         if (user is null)
@@ -31,6 +34,9 @@ public static class OpenClawSignalRClaimResolution
     /// <summary>
     /// 解析用户等级：优先配置的类型，其次 <see cref="ClaimTypes.Role"/>（JWT 默认入站映射）。
     /// </summary>
+    /// <param name="user">当前用户；null 时返回 null</param>
+    /// <param name="tierClaimType"><see cref="OpenClawSignalROptions.TierClaimType"/>；空白时使用 <see cref="ClaimTypes.Role"/></param>
+    /// <returns>档位或角色字符串，无法解析时返回 null</returns>
     public static string? GetTier(ClaimsPrincipal? user, string tierClaimType)
     {
         if (user is null)

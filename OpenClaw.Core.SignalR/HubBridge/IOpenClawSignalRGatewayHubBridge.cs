@@ -7,8 +7,12 @@ namespace OpenClaw.Core.SignalR;
 public interface IOpenClawSignalRGatewayHubBridge
 {
     /// <summary>在 Hub 完成分组与运营快照注册之后调用。</summary>
+    /// <param name="context">当前连接 id 与解析出的用户 id</param>
+    /// <param name="cancellationToken">取消桥接启动（如连接已中止）</param>
     Task OnHubConnectedAsync(OpenClawSignalRGatewayHubBridgeContext context, CancellationToken cancellationToken = default);
 
     /// <summary>在 Hub 断开流程中调用（建议在移除运营快照之后）。</summary>
+    /// <param name="context">与建连时同一连接上下文</param>
+    /// <param name="cancellationToken">取消断开清理</param>
     Task OnHubDisconnectedAsync(OpenClawSignalRGatewayHubBridgeContext context, CancellationToken cancellationToken = default);
 }

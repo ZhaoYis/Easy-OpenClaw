@@ -72,6 +72,7 @@ public sealed class OpenClawSignalRGatewayBuilder
         return Services;
     }
 
+    /// <summary>移除已注册的 <see cref="IOpenClawSignalRConnectionPresenceStore"/> 及内存实现，避免重复注册冲突。</summary>
     private void ClearPresenceRegistrations()
     {
         Services.RemoveAll<IOpenClawSignalRConnectionPresenceStore>();

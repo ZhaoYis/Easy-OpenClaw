@@ -19,6 +19,7 @@ public sealed class OpenClawSignalRHybridConnectionPresenceStore : IOpenClawSign
     private readonly OpenClawSignalRDistributedConnectionIdIndex _index;
     private readonly IOptions<OpenClawSignalROptions> _options;
 
+    /// <summary>注入 Hybrid 缓存、分布式索引与选项。</summary>
     public OpenClawSignalRHybridConnectionPresenceStore(
         HybridCache hybrid,
         OpenClawSignalRDistributedConnectionIdIndex index,
@@ -29,7 +30,10 @@ public sealed class OpenClawSignalRHybridConnectionPresenceStore : IOpenClawSign
         _options = options;
     }
 
-    /// <inheritdoc />
+    /// <summary>在 Hub 建连成功后写入或更新一条连接快照（与 <see cref="OpenClawGatewayHubBase.OnConnectedAsync"/> 同步）。</summary>
+    /// <param name="snapshot">含连接 id、用户、组与身份快照</param>
+    /// <param name="cancellationToken">取消注册</param>
+    /// <remarks>载荷写入 <see cref="HybridCache"/>，索引 token 写入 <see cref="OpenClawSignalRDistributedConnectionIdIndex"/>。</remarks>
     public async ValueTask RegisterAsync(OpenClawSignalRConnectionSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         var o = _options.Value;
@@ -46,7 +50,10 @@ public sealed class OpenClawSignalRHybridConnectionPresenceStore : IOpenClawSign
         await _index.AddAsync(indexToken, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
+    /// <summary>在 Hub 断开时移除对应载荷与索引项。</summary>
+    /// <param name="connectionId">SignalR 连接 id</param>
+    /// <param name="presenceUserId">与注册时 <see cref="OpenClawSignalRConnectionSnapshot.UserId"/> 一致（匿名连接为 <c>null</c>）</param>
+    /// <param name="cancellationToken">取消移除</param>
     public async ValueTask RemoveAsync(string connectionId, string? presenceUserId, CancellationToken cancellationToken = default)
     {
         var o = _options.Value;
@@ -57,7 +64,8 @@ public sealed class OpenClawSignalRHybridConnectionPresenceStore : IOpenClawSign
         await _index.RemoveAsync(indexToken, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <inheritdoc />
+    /// <summary>返回当前缓存中所有快照的副本（运营查询、受众解析枚举）。</summary>
+    /// <param name="cancellationToken">取消枚举</param>
     public async ValueTask<IReadOnlyList<OpenClawSignalRConnectionSnapshot>> GetSnapshotsAsync(CancellationToken cancellationToken = default)
     {
         var o = _options.Value;

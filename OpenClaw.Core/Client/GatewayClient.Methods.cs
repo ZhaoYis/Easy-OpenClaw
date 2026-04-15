@@ -13,8 +13,11 @@ namespace OpenClaw.Core.Client;
 public sealed partial class GatewayClient
 {
     /// <summary>
-    /// 内部统一调用入口。发送 RPC 请求并在控制台打印结果摘要。
+    /// 内部统一调用入口：发送 RPC 并在控制台打印成功摘要或失败原因（瞬态错误用 Warn）。
     /// </summary>
+    /// <param name="method"><see cref="GatewayConstants.Methods"/> 中的方法名</param>
+    /// <param name="parameters">序列化为 JSON 的参数；<c>null</c> 时发送空对象 <c>{}</c></param>
+    /// <param name="ct">取消令牌</param>
     private async Task<GatewayResponse> InvokeAsync(string method, object? parameters = null, CancellationToken ct = default)
     {
         var resp = parameters is null
@@ -52,12 +55,15 @@ public sealed partial class GatewayClient
         };
 
     /// <summary>
-    /// 带重试的调用入口。对瞬态错误（UNAVAILABLE、DEADLINE_EXCEEDED 等）自动重试。
+    /// 带重试的调用入口：对 <see cref="IsTransientError"/> 判定的瞬态错误在指数退避后重试。
     /// </summary>
     /// <param name="method">RPC 方法名</param>
     /// <param name="parameters">请求参数，为 null 时发送空对象</param>
     /// <param name="ct">取消令牌</param>
-    /// <param name="maxRetries">最大重试次数，默认 1</param>
+    /// <param name="maxRetries">
+    /// 首次调用失败后的最大额外尝试次数。默认 <c>1</c> 表示最多共执行 <c>2</c> 次 RPC（首次 + 1 次重试）。
+    /// </param>
+    /// <returns>成功时的响应，或非瞬态错误/已达重试上限时的最后一次响应</returns>
     internal async Task<GatewayResponse> InvokeWithRetryAsync(
         string method, object? parameters = null, CancellationToken ct = default, int maxRetries = 1)
     {
@@ -72,18 +78,20 @@ public sealed partial class GatewayClient
                 return resp;
 
             var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-            Log.Info($"[{method}] 将在 {delay.TotalSeconds:F0}s 后重试 ({attempt + 1}/{maxRetries})…");
+            Log.Info($"[{method}] 将在 {delay.TotalSeconds:F0}s 后重试 (第 {attempt + 1} 次重试，共最多 {maxRetries + 1} 次调用)…");
             await Task.Delay(delay, ct);
         }
 
         return await InvokeAsync(method, parameters, ct);
     }
 
+    /// <summary>根据错误文本判断是否属于可重试的瞬态故障。</summary>
     private static bool IsTransientError(string errorText) =>
         errorText.Contains("UNAVAILABLE", StringComparison.OrdinalIgnoreCase)
         || errorText.Contains("DEADLINE_EXCEEDED", StringComparison.OrdinalIgnoreCase)
         || errorText.Contains("AbortError", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>将字符串截断到 <paramref name="maxLen"/> 并追加省略号。</summary>
     private static string Truncate(string s, int maxLen) =>
         s.Length <= maxLen ? s : s[..maxLen] + "…";
 

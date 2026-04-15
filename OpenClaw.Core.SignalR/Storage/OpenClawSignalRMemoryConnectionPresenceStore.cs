@@ -15,13 +15,17 @@ public sealed class OpenClawSignalRMemoryConnectionPresenceStore : IOpenClawSign
     private readonly object _idLock = new();
     private readonly HashSet<string> _indexTokens = new(StringComparer.Ordinal);
 
+    /// <summary>注入内存缓存与选项（键前缀来自 <see cref="OpenClawSignalROptions.ConnectionPresencePayloadKeyPrefix"/>）。</summary>
     public OpenClawSignalRMemoryConnectionPresenceStore(IMemoryCache cache, IOptions<OpenClawSignalROptions> options)
     {
         _cache = cache;
         _options = options;
     }
 
-    /// <inheritdoc />
+    /// <summary>在 Hub 建连成功后写入或更新一条连接快照（与 <see cref="OpenClawGatewayHubBase.OnConnectedAsync"/> 同步）。</summary>
+    /// <param name="snapshot">含连接 id、用户、组与身份快照</param>
+    /// <param name="cancellationToken">取消注册</param>
+    /// <remarks>使用 <see cref="IMemoryCache"/> 与进程内 <see cref="HashSet{T}"/> 索引，非分布式。</remarks>
     public ValueTask RegisterAsync(OpenClawSignalRConnectionSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -42,7 +46,10 @@ public sealed class OpenClawSignalRMemoryConnectionPresenceStore : IOpenClawSign
         return ValueTask.CompletedTask;
     }
 
-    /// <inheritdoc />
+    /// <summary>在 Hub 断开时移除对应载荷与索引项。</summary>
+    /// <param name="connectionId">SignalR 连接 id</param>
+    /// <param name="presenceUserId">与注册时 <see cref="OpenClawSignalRConnectionSnapshot.UserId"/> 一致（匿名连接为 <c>null</c>）</param>
+    /// <param name="cancellationToken">取消移除</param>
     public ValueTask RemoveAsync(string connectionId, string? presenceUserId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -59,7 +66,8 @@ public sealed class OpenClawSignalRMemoryConnectionPresenceStore : IOpenClawSign
         return ValueTask.CompletedTask;
     }
 
-    /// <inheritdoc />
+    /// <summary>返回当前缓存中所有快照的副本（运营查询、受众解析枚举）。</summary>
+    /// <param name="cancellationToken">取消枚举</param>
     public ValueTask<IReadOnlyList<OpenClawSignalRConnectionSnapshot>> GetSnapshotsAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

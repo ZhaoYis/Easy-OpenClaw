@@ -9,7 +9,10 @@ namespace OpenClaw.Core.Client;
 /// </summary>
 public sealed class FileGatewayClientStateStore : IGatewayClientStateStore
 {
-    /// <inheritdoc />
+    /// <summary>在需要用到持久化 DeviceToken 时调用（如每次建连开始前），无缓存则返回 null。</summary>
+    /// <param name="state">调用方上下文；本实现忽略。</param>
+    /// <param name="gatewayOptions">路径取自 <see cref="GatewayOptions.DeviceTokenFilePath"/>。</param>
+    /// <param name="cancellationToken">取消读取。</param>
     public async Task<string?> LoadDeviceTokenAsync(object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
     {
         _ = state;
@@ -32,7 +35,11 @@ public sealed class FileGatewayClientStateStore : IGatewayClientStateStore
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>在握手获得新 DeviceToken 或 bootstrap handoff 时调用。</summary>
+    /// <param name="token">要写入的令牌。</param>
+    /// <param name="state">与本次建连上下文一致；本实现忽略。</param>
+    /// <param name="gatewayOptions">路径取自 <see cref="GatewayOptions.DeviceTokenFilePath"/>；为 null 时不写入。</param>
+    /// <param name="cancellationToken">取消写入。</param>
     public async Task SaveDeviceTokenAsync(string token, object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
     {
         _ = state;
@@ -56,7 +63,10 @@ public sealed class FileGatewayClientStateStore : IGatewayClientStateStore
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>在需要用到持久化 scopes 时调用（如每次建连开始前），无缓存则返回 null。</summary>
+    /// <param name="state">调用方上下文；本实现忽略。</param>
+    /// <param name="gatewayOptions">路径取自 <see cref="GatewayOptions.DeviceScopesFilePath"/>。</param>
+    /// <param name="cancellationToken">取消读取。</param>
     public async Task<string[]?> LoadDeviceScopesAsync(object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
     {
         _ = state;
@@ -79,7 +89,11 @@ public sealed class FileGatewayClientStateStore : IGatewayClientStateStore
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>在握手获得服务端授予的 scopes 时调用。</summary>
+    /// <param name="scopes">要持久化的作用域数组。</param>
+    /// <param name="state">与本次建连上下文一致；本实现忽略。</param>
+    /// <param name="gatewayOptions">路径取自 <see cref="GatewayOptions.DeviceScopesFilePath"/>；为 null 时不写入。</param>
+    /// <param name="cancellationToken">取消写入。</param>
     public async Task SaveDeviceScopesAsync(string[] scopes, object? state, GatewayOptions gatewayOptions, CancellationToken cancellationToken = default)
     {
         _ = state;

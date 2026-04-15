@@ -5,6 +5,7 @@ namespace OpenClaw.Core.SignalR;
 /// </summary>
 public sealed class OpenClawSignalROptions
 {
+    /// <summary>在 <c>appsettings.json</c> 中绑定本类型的节名。</summary>
     public const string SectionName = "OpenClawSignalR";
 
     /// <summary>推送给 SignalR 客户端的网关事件方法名（客户端 <c>connection.on</c>）。</summary>
@@ -56,7 +57,7 @@ public sealed class OpenClawSignalROptions
     /// <summary>系统广播组；连接成功后自动加入，供 <see cref="IOpenClawSystemBroadcastSender{THub}"/> 使用。</summary>
     public string SystemBroadcastGroupName { get; set; } = "oc:system";
 
-    /// <summary>绑定节 <c>OpenClawSignalR:Jwt</c>。</summary>
+    /// <summary>嵌套 JWT 配置，绑定节 <c>OpenClawSignalR:Jwt</c>。</summary>
     public OpenClawSignalRJwtOptions Jwt { get; set; } = new();
 
     /// <summary>连接载荷缓存键前缀（内置 Memory / Hybrid 存储共用逻辑键）。</summary>

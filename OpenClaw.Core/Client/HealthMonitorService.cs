@@ -30,6 +30,10 @@ public sealed class HealthMonitorService : BackgroundService
     /// <summary>健康状态发生变更（healthy ↔ unhealthy）时触发</summary>
     public event Action<GatewayHealthState>? HealthStateChanged;
 
+    /// <summary>
+    /// 注入 <see cref="GatewayClient"/>、已注册的 <see cref="GatewayEventSubscriber"/> 与选项。
+    /// 需在 Host 启动前完成 <see cref="GatewayEventSubscriber.RegisterAll"/> 等订阅，以便收到 tick/health/heartbeat。
+    /// </summary>
     public HealthMonitorService(
         GatewayClient client,
         GatewayEventSubscriber subscriber,
@@ -40,6 +44,9 @@ public sealed class HealthMonitorService : BackgroundService
         _options = options.Value;
     }
 
+    /// <summary>
+    /// 订阅 <see cref="GatewayEventSubscriber"/> 的被动信号后再调用基类启动。
+    /// </summary>
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         _subscriber.TickReceived += OnTickReceived;
@@ -50,6 +57,7 @@ public sealed class HealthMonitorService : BackgroundService
         return base.StartAsync(cancellationToken);
     }
 
+    /// <summary>取消订阅被动事件后停止。</summary>
     public override Task StopAsync(CancellationToken cancellationToken)
     {
         _subscriber.TickReceived -= OnTickReceived;
@@ -60,6 +68,9 @@ public sealed class HealthMonitorService : BackgroundService
         return base.StopAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// 若启用 <see cref="GatewayOptions.EnableHealthMonitor"/>，在客户端已连接后按间隔调用 health RPC 并结合 tick/heartbeat 超时更新 <see cref="CurrentState"/>。
+    /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_options.EnableHealthMonitor)
@@ -96,6 +107,7 @@ public sealed class HealthMonitorService : BackgroundService
         }
     }
 
+    /// <summary>调用 <c>health</c> RPC 并更新最近一次探测时间与结果字段。</summary>
     private async Task PollHealthAsync(CancellationToken ct)
     {
         try
@@ -134,6 +146,7 @@ public sealed class HealthMonitorService : BackgroundService
         }
     }
 
+    /// <summary>将上次事件时间格式化为 “Xs ago” 或 “n/a”。</summary>
     private static string FormatElapsed(DateTime? ts)
     {
         if (ts is null) return "n/a";
@@ -141,6 +154,7 @@ public sealed class HealthMonitorService : BackgroundService
         return $"{elapsed.TotalSeconds:F0}s ago";
     }
 
+    /// <summary>根据 <see cref="GatewayOptions.TickTimeoutSeconds"/> 与 <see cref="GatewayOptions.HeartbeatTimeoutSeconds"/> 判定被动信号是否超时。</summary>
     private void EvaluatePassiveSignals()
     {
         var now = DateTime.UtcNow;
@@ -168,6 +182,7 @@ public sealed class HealthMonitorService : BackgroundService
         UpdateState(BuildState());
     }
 
+    /// <summary>根据连接、RPC 结果与被动超时原因组装当前健康快照。</summary>
     private GatewayHealthState BuildState(string? unhealthyReason = null)
     {
         var isConnected = _client.IsConnected;
@@ -187,6 +202,7 @@ public sealed class HealthMonitorService : BackgroundService
         };
     }
 
+    /// <summary>写入 <see cref="CurrentState"/>；若 healthy 状态翻转则触发 <see cref="HealthStateChanged"/>。</summary>
     private void UpdateState(GatewayHealthState newState)
     {
         CurrentState = newState;
@@ -206,17 +222,20 @@ public sealed class HealthMonitorService : BackgroundService
 
     // ─── Passive Event Handlers ──────────────────────────
 
+    /// <summary><see cref="GatewayEventSubscriber.TickReceived"/> 回调：刷新 tick 时间戳。</summary>
     private void OnTickReceived()
     {
         _lastTickReceived = DateTime.UtcNow;
     }
 
+    /// <summary><see cref="GatewayEventSubscriber.HealthReceived"/> 回调：记录网关推送的健康结论。</summary>
     private void OnHealthReceived(HealthNotification notification)
     {
         _lastHealthOk = notification.Ok;
         _lastHealthCheck = DateTime.UtcNow;
     }
 
+    /// <summary><see cref="GatewayEventSubscriber.HeartbeatReceived"/> 回调：刷新心跳时间戳。</summary>
     private void OnHeartbeatReceived(HeartbeatNotification notification)
     {
         _lastHeartbeatReceived = DateTime.UtcNow;

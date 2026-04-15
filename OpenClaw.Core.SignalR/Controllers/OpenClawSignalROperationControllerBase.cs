@@ -21,6 +21,7 @@ public abstract class OpenClawSignalROperationControllerBase<THub> : ControllerB
 {
     private readonly IOpenClawSignalROperationService<THub> _operations;
 
+    /// <summary>由派生控制器传入运营服务实例。</summary>
     protected OpenClawSignalROperationControllerBase(IOpenClawSignalROperationService<THub> operations)
     {
         _operations = operations;
@@ -147,6 +148,7 @@ public abstract class OpenClawSignalROperationControllerBase<THub> : ControllerB
         return NoContent();
     }
 
+    /// <summary>将 API 请求体中的 <see cref="JsonElement"/> 数组反序列化为 <c>object?</c> 数组，供 <c>SendCoreAsync</c> 使用。</summary>
     private static object?[]? ToObjectArgs(JsonElement[]? args)
     {
         if (args is null || args.Length == 0)

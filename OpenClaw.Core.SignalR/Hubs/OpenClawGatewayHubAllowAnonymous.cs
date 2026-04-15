@@ -11,6 +11,7 @@ namespace OpenClaw.Core.SignalR;
 [AllowAnonymous]
 public sealed class OpenClawGatewayHubAllowAnonymous : OpenClawGatewayHubBase
 {
+    /// <summary>与 <see cref="OpenClawGatewayHub"/> 相同依赖注入；匿名模式下不加入用户/档位/系统广播组（见基类逻辑）。</summary>
     public OpenClawGatewayHubAllowAnonymous(
         IOpenClawGatewayRpc rpc,
         IOptions<OpenClawSignalROptions> options,

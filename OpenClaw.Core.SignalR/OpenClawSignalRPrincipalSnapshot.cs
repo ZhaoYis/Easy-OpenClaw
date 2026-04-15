@@ -6,6 +6,11 @@ namespace OpenClaw.Core.SignalR;
 /// <summary>
 /// 建连时 <see cref="Microsoft.AspNetCore.SignalR.HubCallerContext.User"/> 的可序列化快照，供运营存储与后续逻辑重建身份上下文。
 /// </summary>
+/// <param name="IsAuthenticated">身份是否标记为已认证</param>
+/// <param name="AuthenticationType">认证方案名称</param>
+/// <param name="NameClaimType">名称 Claim 类型</param>
+/// <param name="RoleClaimType">角色 Claim 类型</param>
+/// <param name="Claims">序列化后的 Claim 列表</param>
 public sealed record OpenClawSignalRPrincipalSnapshot(
     [property: JsonPropertyName("isAuthenticated")]
     bool IsAuthenticated,

@@ -11,6 +11,9 @@ namespace OpenClaw.Core.SignalR;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public sealed class OpenClawGatewayHub : OpenClawGatewayHubBase
 {
+    /// <summary>
+    /// 构造需 JWT 的 Hub；参数转发至基类以注入 RPC、选项、在线存储与桥接。
+    /// </summary>
     public OpenClawGatewayHub(
         IOpenClawGatewayRpc rpc,
         IOptions<OpenClawSignalROptions> options,

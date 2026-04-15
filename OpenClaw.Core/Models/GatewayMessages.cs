@@ -97,7 +97,7 @@ public sealed record GatewayEvent
     [JsonPropertyName("seq")]
     public long? Seq { get; init; }
 
-    /// <summary>随事件下发的状态版本号，供客户端增量同步</summary>
+    /// <summary>随事件下发的状态版本号，供客户端增量同步。结构见 <see cref="StateVersionInfo"/>。</summary>
     [JsonPropertyName("stateVersion")]
     public StateVersionInfo? StateVersion { get; init; }
 }
@@ -148,7 +148,7 @@ public sealed record RawFrame
     [JsonPropertyName("seq")]
     public long? Seq { get; init; }
 
-    /// <summary>状态版本号（仅 event 帧存在）</summary>
+    /// <summary>状态版本号（仅 event 帧存在）。结构见 <see cref="StateVersionInfo"/>。</summary>
     [JsonPropertyName("stateVersion")]
     public StateVersionInfo? StateVersion { get; init; }
 

@@ -1,4 +1,14 @@
-﻿using System.Diagnostics;
+﻿/*
+ * OpenClaw Gateway 控制台客户端（顶层语句入口）
+ *
+ * 流程概要：
+ * 1. 从配置与 OPENCLAW_STATE_DIR 解析状态目录，注册 OpenClaw 核心、事件订阅与健康监控。
+ * 2. ConnectWithRetryAsync 完成握手后启动 Host，并探测一批常用 RPC。
+ * 3. 主循环读取控制台输入，经 ChatAsync 发送；通过 GatewayEventSubscriber 流式打印助手输出。
+ *
+ * 退出：/quit、Ctrl+C，或 Shutdown 事件。
+ */
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenClaw.Core.Client;
@@ -240,6 +250,11 @@ return 0;
 
 // ─── Helpers ────────────────────────────────────────────
 
+/// <summary>
+/// 对返回 UNAVAILABLE / DEADLINE_EXCEEDED / AbortError 的探测调用做有限次指数退避重试。
+/// </summary>
+/// <param name="call">返回 <see cref="GatewayResponse"/> 的异步委托</param>
+/// <param name="maxRetries">首次失败后的最大额外尝试次数（默认 1，即最多 2 次调用）</param>
 static async Task ProbeWithRetryAsync(Func<Task<GatewayResponse>> call, int maxRetries = 1)
 {
     for (var attempt = 0; attempt <= maxRetries; attempt++)
@@ -257,6 +272,7 @@ static async Task ProbeWithRetryAsync(Func<Task<GatewayResponse>> call, int maxR
     }
 }
 
+/// <summary>打印启动横幅与应用版本提示。</summary>
 static void PrintBanner()
 {
     Console.WriteLine();

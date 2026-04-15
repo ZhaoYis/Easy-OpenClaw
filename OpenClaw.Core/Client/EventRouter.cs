@@ -5,8 +5,7 @@ using OpenClaw.Core.Models;
 namespace OpenClaw.Core.Client;
 
 /// <summary>
-/// Dispatches gateway events to registered async handlers by event name.
-/// Supports multiple handlers per event, wildcard "*" handler, and seq tracking.
+/// 按事件名将网关推送分发到已注册的异步处理器；支持同一事件多处理器、通配符 <c>"*"</c> 以及序号连续性检测。
 /// </summary>
 public sealed class EventRouter
 {

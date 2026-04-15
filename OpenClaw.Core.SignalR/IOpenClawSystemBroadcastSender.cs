@@ -8,6 +8,8 @@ namespace OpenClaw.Core.SignalR;
 public interface IOpenClawSystemBroadcastSender<THub>
     where THub : Hub
 {
-    /// <summary>使用 <see cref="OpenClawSignalROptions.SystemBroadcastClientMethod"/> 推送载荷。</summary>
+    /// <summary>向 <see cref="OpenClawSignalROptions.SystemBroadcastGroupName"/> 组调用 <see cref="OpenClawSignalROptions.SystemBroadcastClientMethod"/>。</summary>
+    /// <param name="payload">传给客户端方法的单个参数，可为 null</param>
+    /// <param name="cancellationToken">取消发送</param>
     Task SendAsync(object? payload, CancellationToken cancellationToken = default);
 }

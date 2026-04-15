@@ -31,6 +31,10 @@ public static class OpenClawSignalRServiceCollectionExtensions
     /// <see cref="AllPresenceConnectionsGatewayEventAudienceResolver"/>（按运营快照扇出全部连接，成本较高）、
     /// 集成测试或开发可注册 <see cref="AllClientsGatewayEventAudienceResolver"/>（全员推送，有风险）。
     /// </remarks>
+    /// <param name="services">宿主服务集合</param>
+    /// <param name="configurationSection">可选；绑定 <see cref="OpenClawSignalROptions.SectionName"/> 等配置节</param>
+    /// <param name="configure">可选；代码方式覆盖选项</param>
+    /// <typeparam name="THub">与后续 <c>MapHub&lt;THub&gt;</c> 一致的 Hub 类型</typeparam>
     public static OpenClawSignalRGatewayBuilder AddOpenClawSignalRGateway<THub>(
         this IServiceCollection services,
         IConfigurationSection? configurationSection = null,

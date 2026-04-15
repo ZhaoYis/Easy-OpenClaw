@@ -72,7 +72,12 @@ internal sealed class NotPairedLoopbackWebSocket : LoopbackWebSocket
     {
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 构造含 <see cref="GatewayConstants.ErrorCodes.NotPaired"/> 的 response 帧，忽略 <paramref name="requestRoot"/>。
+    /// </summary>
+    /// <param name="requestId">与出站请求 id 一致</param>
+    /// <param name="requestRoot">未使用</param>
+    /// <returns>JSON 文本，供环回注入</returns>
     protected override string BuildResponseJson(string requestId, JsonElement requestRoot)
     {
         _ = requestRoot;
@@ -96,7 +101,12 @@ internal sealed class FatPayloadLoopbackWebSocket : LoopbackWebSocket
     {
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 若 <paramref name="requestRoot"/> 中 <c>method</c> 为 <see cref="GatewayConstants.Methods.Health"/>，则返回超大 payload 字符串；否则返回较短文本。
+    /// </summary>
+    /// <param name="requestId">与出站请求 id 一致</param>
+    /// <param name="requestRoot">解析 RPC 方法名</param>
+    /// <returns>JSON 文本，供环回注入</returns>
     protected override string BuildResponseJson(string requestId, JsonElement requestRoot)
     {
         var method = requestRoot.TryGetProperty("method", out var m) ? m.GetString() : "";
@@ -123,7 +133,12 @@ internal sealed class RpcErrorLoopbackWebSocket : LoopbackWebSocket
     {
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 构造 <c>ok=false</c> 且错误消息为 <c>bad_request</c> 的 response 帧（非 NOT_PAIRED）。
+    /// </summary>
+    /// <param name="requestId">与出站请求 id 一致</param>
+    /// <param name="requestRoot">未使用</param>
+    /// <returns>JSON 文本，供环回注入</returns>
     protected override string BuildResponseJson(string requestId, JsonElement requestRoot)
     {
         _ = requestRoot;
@@ -158,7 +173,12 @@ internal sealed class DeviceAuthErrorLoopbackWebSocket : LoopbackWebSocket
         _message = message;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// 构造含 <c>error.details.code</c> / <c>reason</c> 的设备认证类错误 response 帧。
+    /// </summary>
+    /// <param name="requestId">与出站请求 id 一致</param>
+    /// <param name="requestRoot">未使用</param>
+    /// <returns>JSON 文本，供环回注入</returns>
     protected override string BuildResponseJson(string requestId, JsonElement requestRoot)
     {
         _ = requestRoot;

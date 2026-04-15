@@ -1,3 +1,9 @@
+/*
+ * OpenClaw 自动审批后台（顶层语句入口）
+ *
+ * 注册 OpenClaw 核心与 AutoApprove HostedService，将状态文件置于 OPENCLAW_STATE_DIR（或默认目录），
+ * 然后 RunAsync；具体轮询与批准逻辑见 AutoApproveService。
+ */
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenClaw.AutoApprove.Core;
@@ -58,6 +64,7 @@ return 0;
 
 // ─── Helpers ────────────────────────────────────────────
 
+/// <summary>打印服务启动横幅。</summary>
 static void PrintBanner()
 {
     Console.WriteLine();

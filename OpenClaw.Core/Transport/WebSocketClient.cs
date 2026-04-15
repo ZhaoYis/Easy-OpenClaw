@@ -19,20 +19,42 @@ public class WebSocketClient : IAsyncDisposable
     private CancellationTokenSource? _receiveCts;
     private Task? _receiveTask;
 
+    /// <summary>
+    /// 收到一条完整文本消息时触发；参数为 UTF-8 解码后的 JSON 字符串。
+    /// 用法：由 <see cref="GatewayClient"/> 订阅并解析为 response / event 帧。
+    /// </summary>
     public event Func<string, Task>? OnMessage;
+
+    /// <summary>
+    /// 对端关闭或本地检测到 Close 帧时触发；参数为关闭状态码与描述（可能为 null）。
+    /// </summary>
     public event Func<WebSocketCloseStatus?, string?, Task>? OnClosed;
+
+    /// <summary>
+    /// 接收循环中发生 <see cref="WebSocketException"/> 等错误时触发。
+    /// </summary>
     public event Func<Exception, Task>? OnError;
 
     /// <summary>当前底层套接字是否处于 Open 状态；可在测试中覆写以模拟已连接。</summary>
     public virtual bool IsConnected =>
         _ws?.State == WebSocketState.Open;
 
+    /// <summary>
+    /// 创建客户端；可选传入 TLS 证书 SHA-256 指纹（十六进制，可含冒号）以启用证书固定。
+    /// </summary>
+    /// <param name="uri">WebSocket 地址（通常为 <c>wss://</c>）</param>
+    /// <param name="tlsFingerprint">证书指纹；null 或空白表示不固定证书，使用系统默认校验</param>
     public WebSocketClient(Uri uri, string? tlsFingerprint = null)
     {
         _uri = uri;
         _pinnedFingerprint = NormalizeFingerprint(tlsFingerprint);
     }
 
+    /// <summary>
+    /// 建立连接并启动后台接收循环；重复调用会先释放旧连接。
+    /// 设置 Origin/User-Agent/KeepAlive；若配置了指纹则覆盖远程证书校验回调。
+    /// </summary>
+    /// <param name="ct">可取消连接握手</param>
     public async Task ConnectAsync(CancellationToken ct = default)
     {
         _ws?.Dispose();
@@ -72,6 +94,10 @@ public class WebSocketClient : IAsyncDisposable
             cancellationToken: ct);
     }
 
+    /// <summary>
+    /// 向对方发送 NormalClosure 并等待接收任务结束；用于优雅关闭。
+    /// </summary>
+    /// <param name="ct">取消关闭握手</param>
     public async Task CloseAsync(CancellationToken ct = default)
     {
         if (_ws is { State: WebSocketState.Open or WebSocketState.CloseReceived })
@@ -101,6 +127,9 @@ public class WebSocketClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// 持续 <see cref="ClientWebSocket.ReceiveAsync"/> 直到取消、关闭或错误；文本消息合并后触发 <see cref="OnMessage"/>。
+    /// </summary>
     private async Task ReceiveLoopAsync(CancellationToken ct)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(GatewayConstants.Transport.ReceiveBufferSize);
@@ -148,6 +177,9 @@ public class WebSocketClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// 调用 <see cref="CloseAsync"/> 并释放底层资源；可多次调用。
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         await CloseAsync();

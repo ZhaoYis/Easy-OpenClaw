@@ -12,6 +12,7 @@ public static class GatewayEventSubscriberExtensions
     /// 将 <see cref="GatewayEventSubscriber"/> 上全部应用层事件订阅为调试输出（事件名 + 参数）。
     /// 应在调用 <see cref="GatewayEventSubscriber.RegisterAll"/> 之前注册，以便与网关推送顺序一致。
     /// </summary>
+    /// <remarks>仅用于观测与排障，不改变订阅器或网关状态。</remarks>
     /// <param name="subscriber">网关事件订阅器</param>
     /// <param name="emit">
     /// 每条应用回调的输出委托，参数为 (事件名, 参数字符串)；为 null 时使用 <see cref="Log.Debug"/>。

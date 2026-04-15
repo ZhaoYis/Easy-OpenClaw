@@ -8,6 +8,15 @@ namespace OpenClaw.Core.SignalR;
 /// </summary>
 public static class OpenClawSignalRJoinedGroups
 {
+    /// <summary>
+    /// 计算与 Hub <c>OnConnectedAsync</c> 一致的组列表：<paramref name="additionalGroups"/> 优先，
+    /// 已认证时再追加用户组、（可选）档位组与系统广播组。
+    /// </summary>
+    /// <param name="user">当前连接的 Claims，匿名时可为 null</param>
+    /// <param name="isAuthenticated">是否与 Hub 中判定一致</param>
+    /// <param name="opts">分组前缀与 Claim 类型配置</param>
+    /// <param name="additionalGroups">基类 <see cref="OpenClawGatewayHubBase.GetAdditionalConnectionGroups"/> 返回的额外组</param>
+    /// <returns>去空白后的组名列表（顺序：额外组 → 用户组 → 档位组 → 系统广播）</returns>
     public static List<string> Build(
         ClaimsPrincipal? user,
         bool isAuthenticated,
@@ -39,6 +48,9 @@ public static class OpenClawSignalRJoinedGroups
         return list;
     }
 
+    /// <summary>
+    /// 为运营快照解析档位 Claim；未认证或未配置 <see cref="OpenClawSignalROptions.TierClaimType"/> 时返回 null。
+    /// </summary>
     public static string? ResolveTierForSnapshot(ClaimsPrincipal? user, OpenClawSignalROptions opts)
     {
         if (user?.Identity?.IsAuthenticated != true)

@@ -27,31 +27,49 @@ public readonly record struct ChatNotification(string? State, string? SessionKey
 /// <summary>
 /// chat.inject 事件：向 transcript 注入消息等场景。
 /// </summary>
+/// <param name="SessionKey">目标会话键</param>
+/// <param name="Role">注入消息角色</param>
+/// <param name="MessageId">消息 id，可能为 null</param>
 public readonly record struct ChatInjectNotification(string? SessionKey, string? Role, string? MessageId);
 
 /// <summary>
 /// session.message 事件：订阅会话后的消息新增或更新。
 /// </summary>
+/// <param name="SessionKey">会话键</param>
+/// <param name="MessageId">消息 id</param>
+/// <param name="Role">消息角色</param>
 public readonly record struct SessionMessageNotification(string? SessionKey, string? MessageId, string? Role);
 
 /// <summary>
 /// session.tool 事件：工具调用或工具流片段。
 /// </summary>
+/// <param name="SessionKey">会话键</param>
+/// <param name="ToolCallId">工具调用 id</param>
+/// <param name="ToolName">工具名称</param>
+/// <param name="Phase">阶段（如 start/delta/end，依网关实现）</param>
 public readonly record struct SessionToolNotification(string? SessionKey, string? ToolCallId, string? ToolName, string? Phase);
 
 /// <summary>
 /// sessions.changed 事件：会话列表或元数据变化。
 /// </summary>
+/// <param name="Reason">变更原因</param>
+/// <param name="SessionKey">关联会话键，可能为 null</param>
 public readonly record struct SessionsChangedNotification(string? Reason, string? SessionKey);
 
 /// <summary>
 /// presence 事件：设备上下线或 presence 变化。
 /// </summary>
+/// <param name="Reason">变化原因</param>
+/// <param name="DeviceId">设备 id 摘要</param>
+/// <param name="Mode">客户端模式</param>
+/// <param name="Host">主机名</param>
 public readonly record struct PresenceNotification(string? Reason, string? DeviceId, string? Mode, string? Host);
 
 /// <summary>
 /// talk_mode 事件：语音对话模式切换（如按键说话与免提）。
 /// </summary>
+/// <param name="Mode">模式名称</param>
+/// <param name="ActiveRaw">active 字段原始字符串</param>
 public readonly record struct TalkModeNotification(string? Mode, string? ActiveRaw);
 
 /// <summary>
@@ -65,36 +83,55 @@ public readonly record struct HealthNotification(bool? Ok, int ChannelCount, int
 /// <summary>
 /// heartbeat 事件：Agent 心跳。
 /// </summary>
+/// <param name="AgentId">上报心跳的 Agent id</param>
+/// <param name="SessionKey">关联会话键，可能为 null</param>
 public readonly record struct HeartbeatNotification(string? AgentId, string? SessionKey);
 
 /// <summary>
 /// cron 事件：定时任务相关推送。
 /// </summary>
+/// <param name="Action">操作类型</param>
+/// <param name="CronId">任务 id</param>
 public readonly record struct CronNotification(string? Action, string? CronId);
 
 /// <summary>
 /// node_pair_requested 事件：新节点请求配对。
 /// </summary>
+/// <param name="RequestId">配对请求 id</param>
+/// <param name="NodeId">节点 id</param>
+/// <param name="Label">展示标签</param>
 public readonly record struct NodePairRequestedNotification(string? RequestId, string? NodeId, string? Label);
 
 /// <summary>
 /// node_pair_resolved 事件：节点配对审批结束。
 /// </summary>
+/// <param name="RequestId">配对请求 id</param>
+/// <param name="Status">审批状态</param>
+/// <param name="NodeId">节点 id</param>
 public readonly record struct NodePairResolvedNotification(string? RequestId, string? Status, string? NodeId);
 
 /// <summary>
 /// node_invoke_request 事件：网关向节点下发能力调用。
 /// </summary>
+/// <param name="InvocationId">调用 id</param>
+/// <param name="Method">能力方法名</param>
+/// <param name="NodeId">目标节点 id</param>
 public readonly record struct NodeInvokeRequestNotification(string? InvocationId, string? Method, string? NodeId);
 
 /// <summary>
 /// device_pair_requested 事件：新设备请求配对。
 /// </summary>
+/// <param name="RequestId">配对请求 id</param>
+/// <param name="DeviceId">设备 id</param>
+/// <param name="Platform">平台标识</param>
 public readonly record struct DevicePairRequestedNotification(string? RequestId, string? DeviceId, string? Platform);
 
 /// <summary>
 /// device_pair_resolved 事件：设备配对审批结束。
 /// </summary>
+/// <param name="RequestId">配对请求 id</param>
+/// <param name="Status">审批状态</param>
+/// <param name="DeviceId">设备 id</param>
 public readonly record struct DevicePairResolvedNotification(string? RequestId, string? Status, string? DeviceId);
 
 /// <summary>
@@ -106,26 +143,39 @@ public readonly record struct VoicewakeChangedNotification(string PayloadKeysSum
 /// <summary>
 /// exec_approval_requested 事件：需要人工审批的命令执行请求。
 /// </summary>
+/// <param name="ApprovalId">审批 id</param>
+/// <param name="Tool">工具名</param>
+/// <param name="Command">命令摘要</param>
 public readonly record struct ExecApprovalRequestedNotification(string? ApprovalId, string? Tool, string? Command);
 
 /// <summary>
 /// exec_approval_resolved 事件：执行审批已决。
 /// </summary>
+/// <param name="ApprovalId">审批 id</param>
+/// <param name="Decision">决定结果</param>
 public readonly record struct ExecApprovalResolvedNotification(string? ApprovalId, string? Decision);
 
 /// <summary>
 /// plugin_approval_requested 事件：插件发起的审批请求。
 /// </summary>
+/// <param name="ApprovalId">审批 id</param>
+/// <param name="Plugin">插件名</param>
+/// <param name="Description">描述</param>
 public readonly record struct PluginApprovalRequestedNotification(string? ApprovalId, string? Plugin, string? Description);
 
 /// <summary>
 /// plugin_approval_resolved 事件：插件审批已决。
 /// </summary>
+/// <param name="ApprovalId">审批 id</param>
+/// <param name="Decision">决定结果</param>
 public readonly record struct PluginApprovalResolvedNotification(string? ApprovalId, string? Decision);
 
 /// <summary>
 /// update_available 事件：检测到网关或组件可更新版本。
 /// </summary>
+/// <param name="CurrentVersion">当前版本</param>
+/// <param name="LatestVersion">最新版本</param>
+/// <param name="Channel">更新渠道</param>
 public readonly record struct UpdateAvailableNotification(string? CurrentVersion, string? LatestVersion, string? Channel);
 
 /// <summary>

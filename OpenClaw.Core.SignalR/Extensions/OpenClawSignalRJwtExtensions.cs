@@ -6,12 +6,12 @@ using Microsoft.Extensions.Options;
 namespace OpenClaw.Core.SignalR;
 
 /// <summary>
-/// 为 SignalR（WebSocket）注册 JWT Bearer：支持 <c>Authorization</c> 头与 query <c>access_token</c>。
+/// 为 SignalR（WebSocket）注册 JWT Bearer：支持 <c>Authorization: Bearer</c>、Hub 路径下 query <c>access_token</c> 与请求头 <c>access_token</c>。
 /// </summary>
 public static class OpenClawSignalRJwtExtensions
 {
     /// <summary>
-    /// 注册 <c>Authentication</c> 默认方案为 Bearer，并绑定 <see cref="OpenClawSignalROptions.Jwt"/> 与 query token 提取逻辑。
+    /// 注册 <c>Authentication</c> 默认方案为 Bearer，并绑定 <see cref="OpenClawSignalROptions.Jwt"/> 与 Hub 路径下 query/头 <c>access_token</c> 补全逻辑。
     /// 宿主仍需 <c>services.AddAuthorization()</c>、<c>app.UseAuthentication()</c>、<c>app.UseAuthorization()</c>，
     /// 以及对 Hub 使用 <c>RequireAuthorization()</c>（或使用带 <c>[Authorize]</c> 的 <see cref="OpenClawGatewayHub"/>）。
     /// </summary>

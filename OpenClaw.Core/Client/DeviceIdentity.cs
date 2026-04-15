@@ -7,13 +7,13 @@ using OpenClaw.Core.Models;
 namespace OpenClaw.Core.Client;
 
 /// <summary>
-/// Manages an Ed25519 keypair for gateway device authentication.
-/// Handles key generation, persistence, device-ID derivation, and challenge signing.
-///
-/// Encoding conventions (matching the Control UI / JS client):
-///   - device.id       → SHA-256(rawPublicKey) lowercase hex
-///   - device.publicKey → raw 32-byte key, base64url no-padding
-///   - device.signature → raw 64-byte sig, base64url no-padding
+/// 管理用于网关设备认证的 Ed25519 密钥对：生成与持久化、由公钥派生设备 ID、以及对连接挑战签名。
+/// 编码约定与 Control UI / JS 客户端一致：
+/// <list type="bullet">
+/// <item><description><c>device.id</c> → <c>SHA-256(rawPublicKey)</c> 小写十六进制</description></item>
+/// <item><description><c>device.publicKey</c> → 原始 32 字节公钥，base64url 无填充</description></item>
+/// <item><description><c>device.signature</c> → 原始 64 字节签名，base64url 无填充</description></item>
+/// </list>
 /// </summary>
 public sealed class DeviceIdentity : IDisposable
 {
@@ -22,7 +22,10 @@ public sealed class DeviceIdentity : IDisposable
     private readonly Key _signingKey;
     private readonly byte[] _rawPublicKey;
 
+    /// <summary>由公钥 SHA-256 派生的设备标识（小写十六进制），与网关 <c>device.id</c> 一致。</summary>
     public string DeviceId { get; }
+
+    /// <summary>原始 32 字节公钥的 base64url（无填充），与网关 <c>device.publicKey</c> 一致。</summary>
     public string PublicKeyBase64Url { get; }
 
     /// <summary>
@@ -81,18 +84,19 @@ public sealed class DeviceIdentity : IDisposable
     }
 
     /// <summary>
-    /// Build the v3 auth payload and produce an Ed25519 signature.
-    /// v3 payload: v3|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce|platform|deviceFamily
-    /// v2 payload (legacy): v2|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce
+    /// 按 <see cref="GatewayConstants.Signature"/> 当前前缀构造 v2/v3 认证载荷并生成 Ed25519 签名。
+    /// v3：<c>v3|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce|platform|deviceFamily</c>；
+    /// v2（兼容）：<c>v2|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce</c>。
     /// </summary>
     /// <param name="clientId">客户端标识符</param>
     /// <param name="clientMode">客户端运行模式</param>
     /// <param name="role">连接角色</param>
     /// <param name="scopes">请求的权限作用域</param>
-    /// <param name="token">认证令牌</param>
-    /// <param name="nonce">服务端下发的随机 nonce</param>
-    /// <param name="platform">运行平台标识（v3 新增绑定字段）</param>
-    /// <param name="deviceFamily">设备系列标识（v3 新增绑定字段，如 "desktop"、"mobile"）</param>
+    /// <param name="token">参与签名的共享 token 字符串（与 connect 中 auth 一致）</param>
+    /// <param name="nonce">服务端 <see cref="GatewayConstants.Events.ConnectChallenge"/> 下发的随机串</param>
+    /// <param name="platform">运行平台标识（v3 绑定字段，见 <see cref="GatewayConstants.Platforms"/>）</param>
+    /// <param name="deviceFamily">设备系列（如 <c>desktop</c>、<c>mobile</c>）</param>
+    /// <returns>base64url 签名、签名时刻与 nonce</returns>
     public DeviceSignature Sign(
         string clientId,
         string clientMode,
@@ -124,9 +128,7 @@ public sealed class DeviceIdentity : IDisposable
         };
     }
 
-    /// <summary>
-    /// RFC 7515 base64url encoding (no padding, URL-safe alphabet).
-    /// </summary>
+    /// <summary>RFC 4648 / JOSE 使用的 base64url：无填充、<c>-</c>/<c>_</c> 字母表。</summary>
     private static string Base64UrlEncode(ReadOnlySpan<byte> data)
     {
         return Convert.ToBase64String(data)

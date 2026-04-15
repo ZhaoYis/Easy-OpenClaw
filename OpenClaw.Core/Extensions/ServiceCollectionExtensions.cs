@@ -59,9 +59,11 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// 注册 <see cref="GatewayEventSubscriber"/> 并自动调用 <see cref="GatewayEventSubscriber.RegisterAll"/>。
-    /// 在需要完整事件日志输出的场景下使用。
+    /// 将 <see cref="GatewayEventSubscriber"/> 注册为单例；不会自动调用 <see cref="GatewayEventSubscriber.RegisterAll"/>，
+    /// 宿主须在启动流程中自行调用以挂载网关事件处理器。
     /// </summary>
+    /// <param name="services">服务集合</param>
+    /// <returns>链式 <paramref name="services"/></returns>
     public static IServiceCollection UseOpenClawEventSubscriber(this IServiceCollection services)
     {
         services.AddSingleton<GatewayEventSubscriber>();
@@ -74,6 +76,8 @@ public static class ServiceCollectionExtensions
     /// 通过 <see cref="GatewayOptions.EnableHealthMonitor"/> 控制是否真正启动轮询，
     /// 但注册本身始终完成，以便应用层可通过 DI 获取 <see cref="HealthMonitorService"/> 实例。
     /// </summary>
+    /// <param name="services">服务集合</param>
+    /// <returns>链式 <paramref name="services"/></returns>
     public static IServiceCollection UseOpenClawHealthMonitor(this IServiceCollection services)
     {
         services.AddSingleton<HealthMonitorService>();
@@ -81,6 +85,11 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// 注册核心单例：<see cref="DeviceIdentity"/>、<see cref="EventRouter"/>、<see cref="GatewayRequestManager"/>、
+    /// 默认状态存储与连接解析器、<see cref="GatewayClient"/>。
+    /// </summary>
+    /// <param name="services">服务集合</param>
     private static void RegisterCoreServices(IServiceCollection services)
     {
         services.AddSingleton<DeviceIdentity>(sp =>

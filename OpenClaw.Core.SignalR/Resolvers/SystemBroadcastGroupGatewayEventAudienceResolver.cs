@@ -10,6 +10,12 @@ namespace OpenClaw.Core.SignalR;
 /// </summary>
 public sealed class SystemBroadcastGroupGatewayEventAudienceResolver : IGatewayEventAudienceResolver
 {
+    /// <summary>
+    /// 根据上下文决定推送到哪些连接；本实现推送到 <see cref="OpenClawSignalROptions.SystemBroadcastGroupName"/> 组。
+    /// </summary>
+    /// <param name="context">含 <see cref="GatewayEventAudienceResolveContext.Options"/> 与 <see cref="GatewayEventAudienceResolveContext.Clients"/></param>
+    /// <param name="target">组代理；组名为空时为 null</param>
+    /// <returns>组名非空白时为 true</returns>
     public bool TryResolveClients(GatewayEventAudienceResolveContext context, [NotNullWhen(true)] out IClientProxy? target)
     {
         var name = context.Options.SystemBroadcastGroupName;

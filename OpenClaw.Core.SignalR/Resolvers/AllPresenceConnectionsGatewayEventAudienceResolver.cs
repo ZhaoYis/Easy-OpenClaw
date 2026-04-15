@@ -16,6 +16,12 @@ public sealed class AllPresenceConnectionsGatewayEventAudienceResolver : IGatewa
 {
     public bool RequiresConnectionSnapshotEnumeration => true;
 
+    /// <summary>
+    /// 根据上下文决定推送到哪些连接；本实现使用 <see cref="GatewayEventAudienceResolveContext.ConnectionSnapshots"/> 中的全部连接 id。
+    /// </summary>
+    /// <param name="context">须已由协调器填入非空 <see cref="GatewayEventAudienceResolveContext.ConnectionSnapshots"/></param>
+    /// <param name="target"><see cref="IHubClients.Clients(string[])"/> 多连接代理；快照为空时为 null</param>
+    /// <returns>快照非空时为 true</returns>
     public bool TryResolveClients(GatewayEventAudienceResolveContext context, [NotNullWhen(true)] out IClientProxy? target)
     {
         target = null;

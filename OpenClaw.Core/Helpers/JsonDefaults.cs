@@ -8,6 +8,10 @@ namespace OpenClaw.Core.Helpers;
 /// </summary>
 public static class JsonDefaults
 {
+    /// <summary>
+    /// 与网关 JSON 协议对齐的全局选项：camelCase、忽略 null、属性名大小写不敏感、不缩进。
+    /// 用法：<c>JsonSerializer.Serialize(..., JsonDefaults.SerializerOptions)</c>。
+    /// </summary>
     public static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

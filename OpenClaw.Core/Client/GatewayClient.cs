@@ -35,8 +35,13 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// <summary>最近一次（或当前）建连调用传入的上下文，用于断线重连时把同一 state 交给 <see cref="IGatewayClientConnectionResolver"/>。</summary>
     private object? _lastConnectionState;
 
+    /// <summary>网关事件路由器；可用 <see cref="OnEvent"/> 或直接订阅底层 API。</summary>
     public EventRouter Events => _events;
+
+    /// <summary>底层 WebSocket 是否已打开（握手成功后通常为 true）。</summary>
     public bool IsConnected => _ws?.IsConnected ?? false;
+
+    /// <summary>客户端连接生命周期状态（含配对等待）。</summary>
     public ConnectionState State => _state;
 
     /// <summary>
@@ -129,6 +134,8 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// 建立连接并完成握手；<paramref name="state"/> 会传给 <see cref="IGatewayClientConnectionResolver"/> 与
     /// <see cref="IGatewayClientStateStore"/>，用于按用户解析 URL/指纹及读写分用户的 DeviceToken、scopes。
     /// </summary>
+    /// <param name="state">任意上下文（如用户 id）；单用户场景可传 <c>null</c></param>
+    /// <param name="ct">取消令牌</param>
     public Task ConnectAsync(object? state, CancellationToken ct = default) => ConnectCoreAsync(state, ct);
 
     /// <summary>
@@ -229,6 +236,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// </summary>
     public Task DisconnectAsync(CancellationToken cancellationToken = default) => DisconnectAsync(null, cancellationToken);
 
+    /// <summary>
+    /// 关闭 WebSocket 并取消生命周期令牌；<paramref name="state"/> 预留与对称重载一致（当前实现未使用）。
+    /// </summary>
+    /// <param name="state">预留参数，保持与带 state 的 Connect 重载对称</param>
+    /// <param name="cancellationToken">当前实现未观察此令牌，仅为 API 一致性保留</param>
     public async Task DisconnectAsync(object? state, CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
@@ -261,6 +273,11 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// </summary>
     public Task ConnectWithRetryAsync(CancellationToken ct = default) => ConnectWithRetryAsync(null, ct);
 
+    /// <summary>
+    /// 与无 state 版本相同，但在 NOT_PAIRED 退避重试时传入 <paramref name="state"/>，以便解析 URL 与状态存储。
+    /// </summary>
+    /// <param name="state">与 <see cref="ConnectAsync(object?, CancellationToken)"/> 相同，用于多用户/多租户隔离</param>
+    /// <param name="ct">取消令牌</param>
     public async Task ConnectWithRetryAsync(object? state, CancellationToken ct = default)
     {
         var attempt = 0;
@@ -422,6 +439,7 @@ public sealed partial class GatewayClient : IAsyncDisposable
     /// 认证结果（角色/权限/DeviceToken）以及系统快照（运行状态、会话默认值等）。
     /// 若响应中包含新的 DeviceToken，自动持久化到磁盘供后续免审批重连使用。
     /// </summary>
+    /// <param name="state"></param>
     /// <param name="resp">connect 请求的网关响应</param>
     private async Task ProcessHelloOkAsync(object? state, GatewayResponse resp, CancellationToken ct)
     {
@@ -996,6 +1014,9 @@ public sealed class AuthTokenMismatchException : Exception
     /// <summary>服务端返回的错误详情 JSON</summary>
     public JsonElement? ErrorDetail { get; }
 
+    /// <summary>使用错误说明与可选的原始 error JSON 构造异常。</summary>
+    /// <param name="message">人类可读说明</param>
+    /// <param name="error">服务端 <c>error</c> 对象，可为 null</param>
     public AuthTokenMismatchException(string message, JsonElement? error = null) : base(message)
     {
         ErrorDetail = error;
@@ -1024,6 +1045,10 @@ public sealed class DeviceAuthException : Exception
     /// <summary>诊断原因标识符，等同于 <see cref="Details"/>.<see cref="AuthErrorDetails.Reason"/></summary>
     public string? Reason => Details.Reason;
 
+    /// <summary>使用说明、结构化详情与可选原始 JSON 构造异常。</summary>
+    /// <param name="message">人类可读说明</param>
+    /// <param name="details">从 <c>error.details</c> 解析的字段</param>
+    /// <param name="error">完整 error 元素，可为 null</param>
     public DeviceAuthException(string message, AuthErrorDetails details, JsonElement? error = null) : base(message)
     {
         Details = details;

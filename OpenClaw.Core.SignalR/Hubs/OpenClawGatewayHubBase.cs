@@ -17,6 +17,12 @@ public abstract class OpenClawGatewayHubBase : Hub
     private readonly IOpenClawSignalRGatewayHubBridge _hubBridge;
     private readonly ILogger _logger;
 
+    /// <summary>由派生类构造函数调用，保存 RPC、选项、在线状态与桥接依赖。</summary>
+    /// <param name="rpc">网关 RPC 抽象</param>
+    /// <param name="options">SignalR 桥接选项</param>
+    /// <param name="presenceStore">连接运营快照存储</param>
+    /// <param name="hubBridge">首个/最后一个客户端时的网关生命周期桥接</param>
+    /// <param name="loggerFactory">按 Hub 具体类型创建日志</param>
     protected OpenClawGatewayHubBase(
         IOpenClawGatewayRpc rpc,
         IOptions<OpenClawSignalROptions> options,
@@ -31,7 +37,10 @@ public abstract class OpenClawGatewayHubBase : Hub
         _logger = loggerFactory.CreateLogger(GetType());
     }
 
-    /// <summary>在加入默认组之后调用；返回额外要加入的组名（已规范化，可直接使用）。</summary>
+    /// <summary>
+    /// 由基类在 <see cref="OnConnectedAsync"/> 中调用；返回的组名与认证后的用户组、档位组、系统广播组一并传入 <see cref="OpenClawSignalRJoinedGroups.Build"/>（额外组名通常列在最前）。
+    /// </summary>
+    /// <param name="context">当前连接 id、用户与选项</param>
     protected virtual IEnumerable<string> GetAdditionalConnectionGroups(OpenClawSignalRConnectionContext context) => [];
 
     /// <summary>
@@ -39,6 +48,9 @@ public abstract class OpenClawGatewayHubBase : Hub
     /// </summary>
     protected virtual bool RequireAuthenticatedConnection => true;
 
+    /// <summary>
+    /// 校验认证后加入用户/档位/系统广播等组，注册在线快照并通知 <see cref="IOpenClawSignalRGatewayHubBridge"/>。
+    /// </summary>
     public override async Task OnConnectedAsync()
     {
         var opts = _options.Value;
@@ -79,6 +91,7 @@ public abstract class OpenClawGatewayHubBase : Hub
         await base.OnConnectedAsync().ConfigureAwait(false);
     }
 
+    /// <summary>从在线存储移除连接并转发桥接断开通知。</summary>
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var disconnectUserId = OpenClawSignalRClaimResolution.GetUserId(Context.User, _options.Value.UserIdClaimType);
@@ -98,6 +111,10 @@ public abstract class OpenClawGatewayHubBase : Hub
     /// <summary>
     /// 代理调用网关 RPC。受 <see cref="OpenClawSignalROptions.AllowedRpcMethods"/> 约束（非空时为白名单）。
     /// </summary>
+    /// <param name="method">网关 RPC 方法名，与 <c>req.method</c> 一致</param>
+    /// <param name="parameters">JSON 参数；null 时等价发送空对象 <c>{}</c></param>
+    /// <returns>网关响应帧</returns>
+    /// <exception cref="HubException">未连接、方法不在白名单或参数非法</exception>
     /// <remarks>
     /// 不含 <see cref="CancellationToken"/> 参数，以便 SignalR 客户端只需传入 <c>method</c> 与 <c>parameters</c>；
     /// 取消使用 <see cref="Hub.Context"/> 的 <see cref="HubCallerContext.ConnectionAborted"/>。
@@ -127,8 +144,12 @@ public abstract class OpenClawGatewayHubBase : Hub
     }
 
     /// <summary>
-    /// 向网关发送对话消息
+    /// 通过已连接的网关 RPC 发送用户消息（等价于客户端 <c>chat.send</c>）。
     /// </summary>
+    /// <param name="userMessage">用户输入文本</param>
+    /// <param name="sessionKey">会话键；null 时由网关使用默认会话</param>
+    /// <returns>网关响应</returns>
+    /// <exception cref="HubException">未连接或参数无效</exception>
     public virtual Task<GatewayResponse> ChatAsync(string userMessage, string? sessionKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userMessage);
@@ -140,6 +161,7 @@ public abstract class OpenClawGatewayHubBase : Hub
     }
 
     /// <summary>返回当前网关连接摘要，供前端展示或探测能力列表。</summary>
+    /// <returns>连接标志、状态及 hello-ok 中的方法与事件列表</returns>
     public virtual Task<OpenClawGatewayStateDto> GetGatewayStateAsync()
     {
         Context.ConnectionAborted.ThrowIfCancellationRequested();

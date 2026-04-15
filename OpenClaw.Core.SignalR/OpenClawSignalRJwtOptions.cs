@@ -11,10 +11,12 @@ public sealed class OpenClawSignalRJwtOptions
     /// <summary>受众。</summary>
     public string? Audience { get; set; }
 
+    /// <summary>签发方；非空时启用 Issuer 校验（映射到 JWT Bearer 的 <c>ValidIssuer</c>）。</summary>
     public string? Issuer { get; set; }
 
     /// <summary>对称密钥 Base64（用于测试或简单场景）；生产可改用 Authority + 元数据。</summary>
     public string? SigningKeyBase64 { get; set; }
 
+    /// <summary>是否要求元数据地址使用 HTTPS（Authority 场景）。</summary>
     public bool RequireHttpsMetadata { get; set; } = true;
 }
